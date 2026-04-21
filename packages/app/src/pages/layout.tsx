@@ -53,6 +53,7 @@ import { retry } from "@opencode-ai/shared/util/retry"
 import { playSoundById } from "@/utils/sound"
 import { createAim } from "@/utils/aim"
 import { setNavigate } from "@/utils/notification-click"
+import { LAST_VISITED_PATH_KEY, persistablePath } from "@/utils/startup-route"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { setSessionHandoff } from "@/pages/session/handoff"
 
@@ -149,6 +150,14 @@ export default function Layout(props: ParentProps) {
   }
   const colorSchemeLabel = (scheme: ColorScheme) => language.t(colorSchemeKey[scheme])
   const currentDir = createMemo(() => route().dir)
+
+  createEffect(() => {
+    const path = `${location.pathname}${location.search}${location.hash}`
+    if (!persistablePath(path)) return
+    try {
+      localStorage.setItem(LAST_VISITED_PATH_KEY, path)
+    } catch {}
+  })
 
   const [state, setState] = createStore({
     autoselect: !initialDirectory,

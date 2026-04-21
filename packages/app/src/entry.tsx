@@ -6,6 +6,7 @@ import { type Platform, PlatformProvider } from "@/context/platform"
 import { dict as en } from "@/i18n/en"
 import { dict as zh } from "@/i18n/zh"
 import { handleNotificationClick } from "@/utils/notification-click"
+import { LAST_VISITED_PATH_KEY, resolveStartupPath } from "@/utils/startup-route"
 import pkg from "../package.json"
 import { ServerConnection } from "./context/server"
 
@@ -52,6 +53,16 @@ const setStorage = (key: string, value: string | null) => {
 const readDefaultServerUrl = () => getStorage(DEFAULT_SERVER_URL_KEY)
 const writeDefaultServerUrl = (url: string | null) => setStorage(DEFAULT_SERVER_URL_KEY, url)
 
+const restoreLastVisitedPath = () => {
+  const next = resolveStartupPath(
+    `${location.pathname}${location.search}${location.hash}`,
+    getStorage(LAST_VISITED_PATH_KEY),
+    location.origin,
+  )
+  if (!next) return
+  window.history.replaceState(window.history.state, "", next)
+}
+
 const notify: Platform["notify"] = async (title, description, href) => {
   if (!("Notification" in window)) return
 
@@ -96,6 +107,8 @@ const root = document.getElementById("root")
 if (!(root instanceof HTMLElement) && import.meta.env.DEV) {
   throw new Error(getRootNotFoundError())
 }
+
+restoreLastVisitedPath()
 
 const getCurrentUrl = () => {
   if (location.hostname.includes("opencode.ai")) return "http://localhost:4096"
