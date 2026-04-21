@@ -16,6 +16,8 @@ const DEFAULT_CSP =
 const csp = (hash = "") =>
   `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; media-src 'self' data:; connect-src 'self' data:`
 
+const isCacheableAsset = (file: string) => /[/\\]assets[/\\]/.test(file)
+
 export const UIRoutes = (): Hono =>
   new Hono().all("/*", async (c) => {
     const embeddedWebUI = await embeddedUIPromise
@@ -30,6 +32,9 @@ export const UIRoutes = (): Hono =>
         c.header("Content-Type", mime)
         if (mime.startsWith("text/html")) {
           c.header("Content-Security-Policy", DEFAULT_CSP)
+          c.header("Cache-Control", "no-cache")
+        } else if (isCacheableAsset(match)) {
+          c.header("Cache-Control", "public, max-age=31536000, immutable")
         }
         return c.body(new Uint8Array(await fs.readFile(match)))
       } else {
