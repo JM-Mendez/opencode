@@ -539,6 +539,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
   const [composing, setComposing] = createSignal(false)
   const isImeComposing = (event: KeyboardEvent) => event.isComposing || composing() || event.keyCode === 229
+  const isIOSWeb =
+    platform.platform === "web" &&
+    typeof navigator === "object" &&
+    (/(iPad|iPhone|iPod)/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1))
 
   const handleBlur = () => {
     closePopover()
@@ -1234,20 +1239,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
 
     // Note: Shift+Enter is handled earlier, before IME check
     if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault()
-      if (event.repeat) return
-      if (
-        working() &&
-        prompt
-          .current()
-          .map((part) => ("content" in part ? part.content : ""))
-          .join("")
-          .trim().length === 0 &&
-        imageAttachments().length === 0 &&
-        commentCount() === 0
-      ) {
+      if (isIOSWeb) {
+        addPart({ type: "text", content: "\n", start: 0, end: 0 })
+        event.preventDefault()
         return
       }
+      event.preventDefault()
+      if (event.repeat) return
       void handleSubmit(event)
     }
   }
