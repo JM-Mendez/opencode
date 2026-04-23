@@ -249,11 +249,10 @@ export function MessageTimeline(props: {
     if (!id) return emptyMessages
     return sync.data.message[id] ?? emptyMessages
   })
-  const pending = createMemo(() =>
-    sessionMessages().findLast(
-      (item): item is AssistantMessage => item.role === "assistant" && typeof item.time.completed !== "number",
-    ),
-  )
+  const pending = createMemo(() => {
+    const last = sessionMessages().findLast((item) => item.role === "assistant")
+    return last && typeof last.time.completed !== "number" ? last : undefined
+  })
   const sessionStatus = createMemo(() => {
     const id = sessionID()
     if (!id) return idle
