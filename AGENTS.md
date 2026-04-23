@@ -4,6 +4,46 @@
 - Local `main` ref may not exist; use `dev` or `origin/dev` for diffs.
 - Prefer automation: execute requested actions without confirmation unless blocked by missing info or safety/irreversibility.
 
+## Opencode Server Setup
+
+There are two opencode servers running:
+
+- **Official server** (port `4096`): installed via `curl -fsSL https://opencode.ai/install | bash` to `~/.opencode/bin/opencode`
+- **Custom development server** (port `4196`): built from this repo at `packages/opencode/script/build.ts` and copied to `~/.opencode/bin/opencode-custom`
+
+### Building the custom binary
+
+```bash
+cd packages/opencode
+bun run build --single
+cp dist/opencode-darwin-arm64/bin/opencode ~/.opencode/bin/opencode-custom
+chmod 755 ~/.opencode/bin/opencode-custom
+```
+
+### Database sharing
+
+The custom build uses a separate database by default (`opencode-<channel>.db`). To make both servers share the same database (`opencode.db`), start the custom server with `OPENCODE_DISABLE_CHANNEL_DB=1`.
+
+### Restarting servers
+
+**Official server (port 4096)**:
+```bash
+pkill -f 'opencode web --hostname 0.0.0.0 --port 4096'
+nohup ~/.opencode/bin/opencode web --hostname 0.0.0.0 --port 4096 > /tmp/opencode-server-4096.log 2>&1 &
+```
+
+**Custom server (port 4196)**:
+```bash
+pkill -f 'opencode-custom web --hostname 0.0.0.0 --port 4196'
+OPENCODE_DISABLE_CHANNEL_DB=1 nohup ~/.opencode/bin/opencode-custom web --hostname 0.0.0.0 --port 4196 > /tmp/opencode-web-4196.log 2>&1 &
+```
+
+Verify both are running:
+```bash
+lsof -nP -iTCP:4096 -sTCP:LISTEN
+lsof -nP -iTCP:4196 -sTCP:LISTEN
+```
+
 ## Style Guide
 
 ### General Principles

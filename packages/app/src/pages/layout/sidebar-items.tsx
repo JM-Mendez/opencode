@@ -98,6 +98,7 @@ const SessionRow = (props: {
   sidebarOpened: Accessor<boolean>
   warmPress: () => void
   warmFocus: () => void
+  closeMobileSidebar: () => void
 }): JSX.Element => {
   const title = () => sessionTitle(props.session.title)
 
@@ -108,6 +109,10 @@ const SessionRow = (props: {
       onPointerDown={props.warmPress}
       onFocus={props.warmFocus}
       onClick={() => {
+        if (props.mobile) {
+          props.closeMobileSidebar()
+          return
+        }
         if (props.sidebarOpened()) return
         props.clearHoverProjectSoon()
       }}
@@ -211,6 +216,7 @@ export const SessionItem = (props: SessionItemProps): JSX.Element => {
       sidebarOpened={layout.sidebar.opened}
       warmPress={() => warm(2, "high")}
       warmFocus={() => warm(2, "high")}
+      closeMobileSidebar={() => layout.mobileSidebar.hide()}
     />
   )
 
@@ -295,6 +301,10 @@ export const NewSessionItem = (props: {
       end
       class={`flex items-center gap-2 min-w-0 w-full text-left focus:outline-none ${props.dense ? "py-0.5" : "py-1"}`}
       onClick={() => {
+        if (props.mobile) {
+          layout.mobileSidebar.hide()
+          return
+        }
         if (layout.sidebar.opened()) return
         props.clearHoverProjectSoon()
       }}
