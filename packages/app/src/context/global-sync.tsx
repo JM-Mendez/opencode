@@ -167,6 +167,7 @@ function createGlobalSync() {
     }
 
     const limit = Math.max(store.limit + SESSION_RECENT_LIMIT, SESSION_RECENT_LIMIT)
+    const sdk = sdkFor(directory)
     const promise = queryClient
       .fetchQuery({
         ...loadSessionsQuery(directory),
@@ -174,7 +175,7 @@ function createGlobalSync() {
           loadRootSessionsWithFallback({
             directory,
             limit,
-            list: (query) => globalSDK.client.session.list(query),
+            list: (query) => sdk.session.list(query),
           })
             .then((x) => {
               const nonArchived = (x.data ?? [])
