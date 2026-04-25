@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/solid-query"
 import { Button } from "@opencode-ai/ui/button"
 import { DockPrompt } from "@opencode-ai/ui/dock-prompt"
 import { Icon } from "@opencode-ai/ui/icon"
+import { Markdown } from "@opencode-ai/ui/markdown"
 import { showToast } from "@opencode-ai/ui/toast"
 import type { QuestionAnswer, QuestionRequest } from "@opencode-ai/sdk/v2"
 import { useLanguage } from "@/context/language"
@@ -73,6 +74,9 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
     customOn: cached?.customOn ?? ([] as boolean[]),
     editing: false,
     focus: 0,
+    planOpen: false,
+    planLoading: false,
+    planContent: undefined as string | undefined,
   })
 
   let root: HTMLDivElement | undefined
@@ -95,6 +99,7 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
 
   const customLabel = () => language.t("ui.messagePart.option.typeOwnAnswer")
   const customPlaceholder = () => language.t("ui.question.custom.placeholder")
+  const planPath = createMemo(() => question()?.question.match(/^Plan at (.+\.md) is complete\./)?.[1])
 
   const last = createMemo(() => store.tab >= total() - 1)
 
@@ -204,6 +209,24 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
     showToast({ title: language.t("common.requestFailed"), description: message })
   }
 
+  const openPlan = async () => {
+    const path = planPath()
+    if (!path) return
+
+    setStore("planOpen", true)
+    if (store.planContent) return
+
+    setStore("planLoading", true)
+    await sdk.client.file
+      .read({ path })
+      .then((x) => {
+        if (!x.data || x.data.type !== "text") throw new Error(language.t("session.question.plan.loadFailed"))
+        setStore("planContent", x.data.content)
+      })
+      .catch(fail)
+      .finally(() => setStore("planLoading", false))
+  }
+
   const replyMutation = useMutation(() => ({
     mutationFn: (answers: QuestionAnswer[]) => sdk.client.question.reply({ requestID: props.request.id, answers }),
     onMutate: () => {
@@ -306,6 +329,10 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
 
     if (event.key === "Escape") {
       event.preventDefault()
+      if (store.planOpen) {
+        setStore("planOpen", false)
+        return
+      }
       void reject()
       return
     }
@@ -451,6 +478,11 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
             {language.t("ui.common.dismiss")}
           </Button>
           <div data-slot="question-footer-actions">
+            <Show when={planPath()}>
+              <Button variant="secondary" size="large" disabled={sending()} onClick={openPlan} class="md:hidden">
+                {language.t("session.question.plan.view")}
+              </Button>
+            </Show>
             <Show when={store.tab > 0}>
               <Button variant="secondary" size="large" disabled={sending()} onClick={back}>
                 {language.t("ui.common.back")}
@@ -469,100 +501,124 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
         </>
       }
     >
-      <div data-slot="question-text">{question()?.question}</div>
-      <Show when={multi()} fallback={<div data-slot="question-hint">{language.t("ui.question.singleHint")}</div>}>
-        <div data-slot="question-hint">{language.t("ui.question.multiHint")}</div>
-      </Show>
-      <div data-slot="question-options">
-        <For each={options()}>
-          {(opt, i) => (
-            <Option
-              multi={multi()}
-              picked={picked(opt.label)}
-              label={opt.label}
-              description={opt.description}
-              disabled={sending()}
-              ref={(el) => (optsRef[i()] = el)}
-              onFocus={() => setStore("focus", i())}
-              onClick={() => selectOption(i())}
-            />
-          )}
-        </For>
+      <Show
+        when={store.planOpen}
+        fallback={
+          <>
+            <div data-slot="question-text">{question()?.question}</div>
+            <Show when={multi()} fallback={<div data-slot="question-hint">{language.t("ui.question.singleHint")}</div>}>
+              <div data-slot="question-hint">{language.t("ui.question.multiHint")}</div>
+            </Show>
+            <div data-slot="question-options">
+              <For each={options()}>
+                {(opt, i) => (
+                  <Option
+                    multi={multi()}
+                    picked={picked(opt.label)}
+                    label={opt.label}
+                    description={opt.description}
+                    disabled={sending()}
+                    ref={(el) => (optsRef[i()] = el)}
+                    onFocus={() => setStore("focus", i())}
+                    onClick={() => selectOption(i())}
+                  />
+                )}
+              </For>
 
-        <Show
-          when={store.editing}
-          fallback={
-            <button
-              type="button"
-              ref={customRef}
-              data-slot="question-option"
-              data-custom="true"
-              data-picked={on()}
-              role={multi() ? "checkbox" : "radio"}
-              aria-checked={on()}
-              disabled={sending()}
-              onFocus={() => setStore("focus", options().length)}
-              onClick={customOpen}
-            >
-              <Mark multi={multi()} picked={on()} onClick={toggleCustomMark} />
-              <span data-slot="question-option-main">
-                <span data-slot="option-label">{customLabel()}</span>
-                <span data-slot="option-description">{input() || customPlaceholder()}</span>
-              </span>
-            </button>
-          }
-        >
-          <form
-            data-slot="question-option"
-            data-custom="true"
-            data-picked={on()}
-            role={multi() ? "checkbox" : "radio"}
-            aria-checked={on()}
-            onMouseDown={(e) => {
-              if (sending()) {
-                e.preventDefault()
-                return
-              }
-              if (e.target instanceof HTMLTextAreaElement) return
-              const input = e.currentTarget.querySelector('[data-slot="question-custom-input"]')
-              if (input instanceof HTMLTextAreaElement) input.focus()
-            }}
-            onSubmit={(e) => {
-              e.preventDefault()
-              commitCustom()
-            }}
-          >
-            <Mark multi={multi()} picked={on()} onClick={toggleCustomMark} />
-            <span data-slot="question-option-main">
-              <span data-slot="option-label">{customLabel()}</span>
-              <textarea
-                ref={focusCustom}
-                data-slot="question-custom-input"
-                placeholder={customPlaceholder()}
-                value={input()}
-                rows={1}
-                disabled={sending()}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
+              <Show
+                when={store.editing}
+                fallback={
+                  <button
+                    type="button"
+                    ref={customRef}
+                    data-slot="question-option"
+                    data-custom="true"
+                    data-picked={on()}
+                    role={multi() ? "checkbox" : "radio"}
+                    aria-checked={on()}
+                    disabled={sending()}
+                    onFocus={() => setStore("focus", options().length)}
+                    onClick={customOpen}
+                  >
+                    <Mark multi={multi()} picked={on()} onClick={toggleCustomMark} />
+                    <span data-slot="question-option-main">
+                      <span data-slot="option-label">{customLabel()}</span>
+                      <span data-slot="option-description">{input() || customPlaceholder()}</span>
+                    </span>
+                  </button>
+                }
+              >
+                <form
+                  data-slot="question-option"
+                  data-custom="true"
+                  data-picked={on()}
+                  role={multi() ? "checkbox" : "radio"}
+                  aria-checked={on()}
+                  onMouseDown={(e) => {
+                    if (sending()) {
+                      e.preventDefault()
+                      return
+                    }
+                    if (e.target instanceof HTMLTextAreaElement) return
+                    const input = e.currentTarget.querySelector('[data-slot="question-custom-input"]')
+                    if (input instanceof HTMLTextAreaElement) input.focus()
+                  }}
+                  onSubmit={(e) => {
                     e.preventDefault()
-                    setStore("editing", false)
-                    focus(options().length)
-                    return
-                  }
-                  if ((e.metaKey || e.ctrlKey) && !e.altKey) return
-                  if (e.key !== "Enter" || e.shiftKey) return
-                  e.preventDefault()
-                  commitCustom()
-                }}
-                onInput={(e) => {
-                  customUpdate(e.currentTarget.value)
-                  resizeInput(e.currentTarget)
-                }}
-              />
-            </span>
-          </form>
-        </Show>
-      </div>
+                    commitCustom()
+                  }}
+                >
+                  <Mark multi={multi()} picked={on()} onClick={toggleCustomMark} />
+                  <span data-slot="question-option-main">
+                    <span data-slot="option-label">{customLabel()}</span>
+                    <textarea
+                      ref={focusCustom}
+                      data-slot="question-custom-input"
+                      placeholder={customPlaceholder()}
+                      value={input()}
+                      rows={1}
+                      disabled={sending()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          e.preventDefault()
+                          setStore("editing", false)
+                          focus(options().length)
+                          return
+                        }
+                        if ((e.metaKey || e.ctrlKey) && !e.altKey) return
+                        if (e.key !== "Enter" || e.shiftKey) return
+                        e.preventDefault()
+                        commitCustom()
+                      }}
+                      onInput={(e) => {
+                        customUpdate(e.currentTarget.value)
+                        resizeInput(e.currentTarget)
+                      }}
+                    />
+                  </span>
+                </form>
+              </Show>
+            </div>
+          </>
+        }
+      >
+        <div data-slot="question-plan-panel" class="md:hidden" role="dialog" aria-modal="true">
+          <div data-slot="question-plan-header">
+            <div data-slot="question-plan-title">{language.t("session.question.plan.title")}</div>
+            <Button variant="ghost" size="large" onClick={() => setStore("planOpen", false)}>
+              {language.t("common.close")}
+            </Button>
+          </div>
+          <div data-slot="question-plan-content">
+            <Show
+              when={!store.planLoading}
+              fallback={<div data-slot="question-plan-status">{language.t("session.question.plan.loading")}</div>}
+            >
+              <Markdown text={store.planContent ?? ""} cacheKey={planPath()} />
+            </Show>
+          </div>
+        </div>
+      </Show>
     </DockPrompt>
   )
 }
