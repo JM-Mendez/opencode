@@ -476,6 +476,7 @@ export default function Layout(props: ParentProps) {
         const [store] = globalSync.child(directory, { bootstrap: false })
         const session = store.session.find((s) => s.id === props.sessionID)
         const sessionKey = `${directory}:${props.sessionID}`
+        if (session?.parentID) return
 
         const sessionTitle = session?.title ?? language.t("command.session.new")
         const projectName = getFilename(directory)
@@ -507,7 +508,6 @@ export default function Layout(props: ParentProps) {
 
         const currentSession = params.id
         if (workspaceKey(directory) === workspaceKey(currentDir()) && props.sessionID === currentSession) return
-        if (workspaceKey(directory) === workspaceKey(currentDir()) && session?.parentID === currentSession) return
 
         dismissSessionAlert(sessionKey)
 

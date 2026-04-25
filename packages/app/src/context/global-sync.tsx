@@ -9,6 +9,7 @@ import type {
 } from "@opencode-ai/sdk/v2/client"
 import { showToast } from "@opencode-ai/ui/toast"
 import { getFilename } from "@opencode-ai/shared/util/path"
+import { makeEventListener } from "@solid-primitives/event-listener"
 import { batch, createContext, getOwner, onCleanup, onMount, type ParentProps, untrack, useContext } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useLanguage } from "@/context/language"
@@ -70,6 +71,8 @@ function createGlobalSync() {
   let bootingRoot = false
   let eventFrame: number | undefined
   let eventTimer: ReturnType<typeof setTimeout> | undefined
+  let hiddenAt = 0
+  let foregroundRefreshAt = 0
 
   onCleanup(() => {
     if (eventFrame !== undefined) cancelAnimationFrame(eventFrame)
@@ -348,6 +351,26 @@ function createGlobalSync() {
   }
 
   onMount(() => {
+    const refreshForeground = (event?: Event) => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now()
+        return
+      }
+      if (!hiddenAt && event?.type !== "online") return
+      if (hiddenAt && Date.now() - hiddenAt < 1000) return
+      if (Date.now() - foregroundRefreshAt < 1000) return
+      hiddenAt = 0
+      foregroundRefreshAt = Date.now()
+      queue.refresh()
+      for (const directory of Object.keys(children.children)) {
+        queue.push(directory)
+      }
+    }
+
+    makeEventListener(document, "visibilitychange", refreshForeground)
+    makeEventListener(window, "pageshow", refreshForeground)
+    makeEventListener(window, "online", refreshForeground)
+
     if (typeof requestAnimationFrame === "function") {
       eventFrame = requestAnimationFrame(() => {
         eventFrame = undefined

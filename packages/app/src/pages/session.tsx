@@ -548,6 +548,7 @@ export default function Page() {
   let reviewFrame: number | undefined
   let refreshFrame: number | undefined
   let refreshTimer: number | undefined
+  let foregroundSyncAt = 0
   let todoFrame: number | undefined
   let todoTimer: number | undefined
   let diffFrame: number | undefined
@@ -787,6 +788,34 @@ export default function Page() {
       return sync.session.sync(id)
     },
   )
+
+  onMount(() => {
+    let hiddenAt = 0
+    const refreshForeground = (event?: Event) => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now()
+        return
+      }
+      if (!hiddenAt && event?.type !== "online") return
+      if (hiddenAt && Date.now() - hiddenAt < 1000) return
+      if (Date.now() - foregroundSyncAt < 1000) return
+      const id = params.id
+      if (!id) return
+      hiddenAt = 0
+      foregroundSyncAt = Date.now()
+      untrack(() => {
+        void sync.session.sync(id, { force: true })
+        void sync.session.diff(id, { force: true })
+        if ((sync.data.session_status[id]?.type ?? "idle") !== "idle" || sync.data.todo[id] !== undefined) {
+          void sync.session.todo(id, { force: true })
+        }
+      })
+    }
+
+    makeEventListener(document, "visibilitychange", refreshForeground)
+    makeEventListener(window, "pageshow", refreshForeground)
+    makeEventListener(window, "online", refreshForeground)
+  })
 
   createEffect(
     on(
