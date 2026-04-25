@@ -434,7 +434,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           const [, setStore] = globalSync.child(directory)
           return runInflight(inflightStatus, directory, () =>
             retry(() => client.session.status()).then((status) => {
-              setStore("session_status", status.data!)
+              setStore("session_status", reconcile(status.data!))
             }),
           )
         },

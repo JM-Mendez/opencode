@@ -266,7 +266,7 @@ export async function bootstrapDirectory(input: {
           loadAgentsQuery(input.directory, input.sdk, (x) => input.setStore("agent", normalizeAgentList(x.data))),
         ),
       () => retry(() => input.sdk.config.get().then((x) => input.setStore("config", x.data!))),
-      () => retry(() => input.sdk.session.status().then((x) => input.setStore("session_status", x.data!))),
+      () => retry(() => input.sdk.session.status().then((x) => input.setStore("session_status", reconcile(x.data!)))),
       !seededProject &&
         (() => retry(() => input.sdk.project.current()).then((x) => input.setStore("project", x.data!.id))),
       !seededPath &&
