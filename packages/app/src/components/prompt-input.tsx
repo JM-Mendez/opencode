@@ -1,7 +1,8 @@
 import { useFilteredList } from "@opencode-ai/ui/hooks"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
-import { createEffect, on, Component, Show, onCleanup, createMemo, createSignal, createResource } from "solid-js"
+import { createEffect, on, Component, Show, onCleanup, createMemo, createSignal, createResource, onMount } from "solid-js"
 import { createStore } from "solid-js/store"
+import { makeEventListener } from "@solid-primitives/event-listener"
 import { useLocal } from "@/context/local"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import {
@@ -550,6 +551,22 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     editorRef.blur()
     requestAnimationFrame(() => editorRef.blur())
   }
+
+  const dismissIOSKeyboardIfFocused = () => {
+    if (document.activeElement !== editorRef) return
+    dismissIOSKeyboard()
+  }
+
+  onMount(() => {
+    if (!isIOSWeb) return
+
+    makeEventListener(document, "visibilitychange", () => {
+      if (document.visibilityState !== "hidden") return
+      dismissIOSKeyboardIfFocused()
+    })
+    makeEventListener(window, "pagehide", dismissIOSKeyboardIfFocused)
+    makeEventListener(window, "pageshow", () => requestAnimationFrame(dismissIOSKeyboardIfFocused))
+  })
 
   const handleBlur = () => {
     closePopover()
