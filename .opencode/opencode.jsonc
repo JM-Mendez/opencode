@@ -11,7 +11,4 @@
     "github-triage": false,
     "github-pr-search": false,
   },
-  "plugin": [
-    ["./ntfy-notifications.ts", { "events": ["question.asked", "session.idle", "session.error"] }]
-  ],
 }
