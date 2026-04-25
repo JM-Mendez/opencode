@@ -1154,7 +1154,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 16px 10px 8px;
+    padding: 16px 10px calc(48px + env(safe-area-inset-bottom));
     scrollbar-width: none;
     -ms-overflow-style: none;
 

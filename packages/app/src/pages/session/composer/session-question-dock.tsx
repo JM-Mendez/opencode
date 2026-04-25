@@ -138,7 +138,10 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
     const dock = root.closest('[data-component="session-prompt-dock"]')
     if (!(dock instanceof HTMLElement)) return
 
-    const dockBottom = dock.getBoundingClientRect().bottom
+    const viewportBottom = window.visualViewport
+      ? window.visualViewport.offsetTop + window.visualViewport.height
+      : window.innerHeight
+    const dockBottom = Math.min(dock.getBoundingClientRect().bottom, viewportBottom)
     const below = Math.max(0, dockBottom - root.getBoundingClientRect().bottom)
     const gap = 8
     const max = Math.max(240, Math.floor(dockBottom - top - gap - below))
