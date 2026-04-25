@@ -545,9 +545,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     (/(iPad|iPhone|iPod)/.test(navigator.userAgent) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1))
 
-  const handleSubmitButtonClick = () => {
+  const dismissIOSKeyboard = () => {
     if (!isIOSWeb) return
     editorRef.blur()
+    requestAnimationFrame(() => editorRef.blur())
   }
 
   const handleBlur = () => {
@@ -1100,6 +1101,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     onSubmit: props.onSubmit,
   })
 
+  const handleFormSubmit = (event: Event) => {
+    void handleSubmit(event)
+    dismissIOSKeyboard()
+  }
+
   const handleKeyDown = (event: KeyboardEvent) => {
     if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "u") {
       event.preventDefault()
@@ -1288,7 +1294,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         t={(key) => language.t(key as Parameters<typeof language.t>[0])}
       />
       <DockShellForm
-        onSubmit={handleSubmit}
+        onSubmit={handleFormSubmit}
         classList={{
           "group/prompt-input": true,
           "focus-within:shadow-xs-border": true,
@@ -1408,7 +1414,6 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   type="submit"
                   disabled={!working() && blank()}
                   tabIndex={store.mode === "normal" ? undefined : -1}
-                  onClick={handleSubmitButtonClick}
                   icon={stopping() ? "stop" : store.mode === "shell" ? "arrow-undo-down" : "arrow-up"}
                   variant="primary"
                   class="size-8"
