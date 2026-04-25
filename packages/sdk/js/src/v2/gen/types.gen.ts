@@ -4439,6 +4439,43 @@ export type ProviderAuthResponses = {
 
 export type ProviderAuthResponse = ProviderAuthResponses[keyof ProviderAuthResponses]
 
+export type ProviderChatgptUsageData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/provider/chatgpt/usage"
+}
+
+export type ProviderChatgptUsageResponses = {
+  /**
+   * ChatGPT usage
+   */
+  200: {
+    available: boolean
+    plan: string | null
+    allowed: boolean | null
+    limited: boolean | null
+    primary: {
+      usedPercent: number | null
+      remainingPercent: number | null
+      resetsAt: number | null
+      resetAfterSeconds: number | null
+    } | null
+    secondary: {
+      usedPercent: number | null
+      remainingPercent: number | null
+      resetsAt: number | null
+      resetAfterSeconds: number | null
+    } | null
+    reason: "missing_auth" | "unsupported_auth" | "upstream_error" | null
+  }
+}
+
+export type ProviderChatgptUsageResponse = ProviderChatgptUsageResponses[keyof ProviderChatgptUsageResponses]
+
 export type ProviderOauthAuthorizeData = {
   body?: {
     /**

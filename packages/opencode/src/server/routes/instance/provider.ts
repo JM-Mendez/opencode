@@ -6,11 +6,73 @@ import { Provider } from "@/provider"
 import { ModelsDev } from "@/provider"
 import { ProviderAuth } from "@/provider"
 import { ProviderID } from "@/provider/schema"
+import { Auth } from "@/auth"
+import { extractAccountId, refreshAccessToken } from "@/plugin/codex"
 import { mapValues } from "remeda"
 import { errors } from "../../error"
 import { lazy } from "@/util/lazy"
 import { Effect } from "effect"
 import { jsonRequest } from "./trace"
+
+const ChatGPTUsageWindow = z
+  .object({
+    usedPercent: z.number().nullable(),
+    remainingPercent: z.number().nullable(),
+    resetsAt: z.number().nullable(),
+    resetAfterSeconds: z.number().nullable(),
+  })
+  .nullable()
+
+const ChatGPTUsage = z.object({
+  available: z.boolean(),
+  plan: z.string().nullable(),
+  allowed: z.boolean().nullable(),
+  limited: z.boolean().nullable(),
+  primary: ChatGPTUsageWindow,
+  secondary: ChatGPTUsageWindow,
+  reason: z.enum(["missing_auth", "unsupported_auth", "upstream_error"]).nullable(),
+})
+
+const WhamWindow = z.object({
+  used_percent: z.number().optional(),
+  reset_at: z.number().optional(),
+  reset_after_seconds: z.number().optional(),
+})
+
+const WhamUsage = z.object({
+  plan_type: z.string().optional(),
+  rate_limit: z
+    .object({
+      allowed: z.boolean().optional(),
+      limit_reached: z.boolean().optional(),
+      primary_window: WhamWindow.optional(),
+      secondary_window: WhamWindow.optional(),
+    })
+    .optional(),
+})
+
+function normalizeWindow(window: z.infer<typeof WhamWindow> | undefined) {
+  if (!window) return null
+  const usedPercent = typeof window.used_percent === "number" ? Math.max(0, Math.min(100, window.used_percent)) : null
+  return {
+    usedPercent,
+    remainingPercent: usedPercent === null ? null : Math.max(0, 100 - usedPercent),
+    resetsAt: window.reset_at ?? null,
+    resetAfterSeconds: window.reset_after_seconds ?? null,
+  }
+}
+
+function unavailable(reason: z.infer<typeof ChatGPTUsage>["reason"]): z.infer<typeof ChatGPTUsage> {
+  return {
+    available: false,
+    plan: null,
+    allowed: null,
+    limited: null,
+    primary: null,
+    secondary: null,
+    reason,
+  }
+}
 
 export const ProviderRoutes = lazy(() =>
   new Hono()
@@ -78,6 +140,72 @@ export const ProviderRoutes = lazy(() =>
         jsonRequest("ProviderRoutes.auth", c, function* () {
           const svc = yield* ProviderAuth.Service
           return yield* svc.methods()
+        }),
+    )
+    .get(
+      "/chatgpt/usage",
+      describeRoute({
+        summary: "Get ChatGPT usage",
+        description: "Get normalized ChatGPT plan and rate limit usage from locally stored OAuth credentials.",
+        operationId: "provider.chatgpt.usage",
+        responses: {
+          200: {
+            description: "ChatGPT usage",
+            content: {
+              "application/json": {
+                schema: resolver(ChatGPTUsage),
+              },
+            },
+          },
+        },
+      }),
+      async (c) =>
+        jsonRequest("ProviderRoutes.chatgptUsage", c, function* () {
+          const auth = yield* Auth.Service
+          const entries = yield* Effect.forEach(["openai", "codex", "chatgpt"], (key) =>
+            Effect.gen(function* () {
+              return { key, info: yield* auth.get(key) }
+            }),
+          )
+          const entry = entries.find((entry) => entry.info?.type === "oauth")
+          if (!entry && !entries.some((entry) => !!entry.info)) return unavailable("missing_auth")
+          if (!entry) return unavailable("unsupported_auth")
+          const info = entry.info
+          if (info?.type !== "oauth") return unavailable("unsupported_auth")
+
+          const current = info.expires < Date.now() + 30_000
+            ? yield* Effect.promise(async () => {
+                const tokens = await refreshAccessToken(info.refresh)
+                const accountId = extractAccountId(tokens) || info.accountId
+                return {
+                  type: "oauth" as const,
+                  refresh: tokens.refresh_token,
+                  access: tokens.access_token,
+                  expires: Date.now() + (tokens.expires_in ?? 3600) * 1000,
+                  ...(accountId && { accountId }),
+                }
+              }).pipe(Effect.catch(() => Effect.succeed(undefined)))
+            : info
+          if (!current) return unavailable("upstream_error")
+          if (current !== info) yield* auth.set(entry.key, current)
+
+          return yield* Effect.promise(async () => {
+            const headers = new Headers({ authorization: `Bearer ${current.access}` })
+            if (current.accountId) headers.set("ChatGPT-Account-Id", current.accountId)
+            const response = await fetch("https://chatgpt.com/backend-api/wham/usage", { headers })
+            if (!response.ok) return unavailable("upstream_error")
+            const parsed = WhamUsage.safeParse(await response.json())
+            if (!parsed.success) return unavailable("upstream_error")
+            return {
+              available: true,
+              plan: parsed.data.plan_type ?? null,
+              allowed: parsed.data.rate_limit?.allowed ?? null,
+              limited: parsed.data.rate_limit?.limit_reached ?? null,
+              primary: normalizeWindow(parsed.data.rate_limit?.primary_window),
+              secondary: normalizeWindow(parsed.data.rate_limit?.secondary_window),
+              reason: null,
+            }
+          }).pipe(Effect.catch(() => Effect.succeed(unavailable("upstream_error"))))
         }),
     )
     .post(

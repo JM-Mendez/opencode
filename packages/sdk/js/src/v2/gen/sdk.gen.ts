@@ -91,6 +91,7 @@ import type {
   ProjectUpdateErrors,
   ProjectUpdateResponses,
   ProviderAuthResponses,
+  ProviderChatgptUsageResponses,
   ProviderListResponses,
   ProviderOauthAuthorizeErrors,
   ProviderOauthAuthorizeResponses,
@@ -2850,6 +2851,38 @@ export class Question extends HeyApiClient {
   }
 }
 
+export class Chatgpt extends HeyApiClient {
+  /**
+   * Get ChatGPT usage
+   *
+   * Get normalized ChatGPT plan and rate limit usage from locally stored OAuth credentials.
+   */
+  public usage<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ProviderChatgptUsageResponses, unknown, ThrowOnError>({
+      url: "/provider/chatgpt/usage",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Oauth extends HeyApiClient {
   /**
    * OAuth authorize
@@ -3003,6 +3036,11 @@ export class Provider extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _chatgpt?: Chatgpt
+  get chatgpt(): Chatgpt {
+    return (this._chatgpt ??= new Chatgpt({ client: this.client }))
   }
 
   private _oauth?: Oauth

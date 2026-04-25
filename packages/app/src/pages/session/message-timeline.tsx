@@ -21,9 +21,11 @@ import { Popover as KobaltePopover } from "@kobalte/core/popover"
 import { shouldMarkBoundaryGesture, normalizeWheelDelta } from "@/pages/session/message-gesture"
 import { SessionContextUsage } from "@/components/session-context-usage"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { useLanguage } from "@/context/language"
 import { useSessionKey } from "@/pages/session/session-layout"
+import { SessionContextTab } from "@/components/session/session-context-tab"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
@@ -332,6 +334,7 @@ export function MessageTimeline(props: {
     return language.t("command.session.new")
   })
   const showHeader = createMemo(() => !!(titleValue() || parentID()))
+  const isDesktop = createMediaQuery("(min-width: 768px)")
   const stageCfg = { init: 1, batch: 3 }
   const staging = createTimelineStaging({
     sessionKey,
@@ -344,6 +347,7 @@ export function MessageTimeline(props: {
     draft: "",
     editing: false,
     menuOpen: false,
+    pendingContext: false,
     pendingRename: false,
     pendingShare: false,
   })
@@ -439,6 +443,7 @@ export function MessageTimeline(props: {
           draft: "",
           editing: false,
           menuOpen: false,
+          pendingContext: false,
           pendingRename: false,
           pendingShare: false,
         }),
@@ -465,6 +470,22 @@ export function MessageTimeline(props: {
       titleRef?.focus()
       titleRef?.select()
     })
+  }
+
+  const openMobileSessionContext = () => {
+    if (!sessionID() || isDesktop()) return
+    dialog.show(() => (
+      <Dialog
+        title={language.t("session.tab.context")}
+        size="large"
+        transition
+        class="!fixed !inset-x-2 !bottom-2 !top-auto !w-auto !max-w-none !min-h-0 !h-[min(82vh,720px)] !rounded-t-xl"
+      >
+        <div class="h-full min-h-0">
+          <SessionContextTab />
+        </div>
+      </Dialog>
+    ))
   }
 
   const closeTitleEditor = () => {
@@ -855,9 +876,26 @@ export function MessageTimeline(props: {
                                       setShare({ open: true, dismiss: null })
                                       setTitle("pendingShare", false)
                                     })
+                                    return
+                                  }
+                                  if (title.pendingContext) {
+                                    event.preventDefault()
+                                    requestAnimationFrame(() => {
+                                      openMobileSessionContext()
+                                      setTitle("pendingContext", false)
+                                    })
                                   }
                                 }}
                               >
+                                <Show when={!isDesktop()}>
+                                  <DropdownMenu.Item
+                                    onSelect={() => {
+                                      setTitle({ pendingContext: true, menuOpen: false })
+                                    }}
+                                  >
+                                    <DropdownMenu.ItemLabel>{language.t("session.tab.context")}</DropdownMenu.ItemLabel>
+                                  </DropdownMenu.Item>
+                                </Show>
                                 <DropdownMenu.Item
                                   onSelect={() => {
                                     setTitle("pendingRename", true)
