@@ -186,6 +186,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     const inflight = new Map<string, Promise<void>>()
     const inflightDiff = new Map<string, Promise<void>>()
     const inflightTodo = new Map<string, Promise<void>>()
+    const inflightStatus = new Map<string, Promise<void>>()
     const optimistic = new Map<string, Map<string, OptimisticItem>>()
     const maxDirs = 30
     const seen = new Map<string, Set<string>>()
@@ -426,6 +427,16 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             message,
             parts: input.parts,
           })
+        },
+        async status() {
+          const directory = sdk.directory
+          const client = sdk.client
+          const [, setStore] = globalSync.child(directory)
+          return runInflight(inflightStatus, directory, () =>
+            retry(() => client.session.status()).then((status) => {
+              setStore("session_status", status.data!)
+            }),
+          )
         },
         async sync(sessionID: string, opts?: { force?: boolean }) {
           const directory = sdk.directory

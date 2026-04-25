@@ -26,7 +26,7 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { DropdownMenu } from "@opencode-ai/ui/dropdown-menu"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { getFilename } from "@opencode-ai/shared/util/path"
-import { Session, type Message } from "@opencode-ai/sdk/v2/client"
+import { Session, type Message, type PermissionRequest, type QuestionRequest } from "@opencode-ai/sdk/v2/client"
 import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
 import { createStore, produce, reconcile } from "solid-js/store"
@@ -439,6 +439,37 @@ export default function Layout(props: ParentProps) {
         alertedAtBySession.delete(sessionKey)
       }
 
+      const sessionForAlert = (directory: string, sessionID: string) => {
+        const [store, setStore] = globalSync.child(directory, { bootstrap: false })
+        const cached = store.session.find((s) => s.id === sessionID)
+        if (cached) return Promise.resolve(cached)
+        return retry(() =>
+          globalSDK
+            .createClient({ directory, throwOnError: true })
+            .session.get({ sessionID })
+            .then((result) => result.data),
+        )
+          .then((session) => {
+            if (!session) return
+            setStore(
+              "session",
+              produce((draft) => {
+                const match = Binary.search(draft, session.id, (s) => s.id)
+                if (match.found) {
+                  draft[match.index] = session
+                  return
+                }
+                draft.splice(match.index, 0, session)
+              }),
+            )
+            return session
+          })
+          .catch((error) => {
+            console.debug("[notifications] failed to load session for alert", { directory, sessionID, error })
+            return undefined
+          })
+      }
+
       const unsub = globalSDK.event.listen((e) => {
         if (e.details?.type === "worktree.ready") {
           setBusy(e.name, false)
@@ -464,70 +495,73 @@ export default function Layout(props: ParentProps) {
         }
 
         if (e.details?.type !== "permission.asked" && e.details?.type !== "question.asked") return
-        const title =
-          e.details.type === "permission.asked"
-            ? language.t("notification.permission.title")
-            : language.t("notification.question.title")
-        const icon = e.details.type === "permission.asked" ? ("checklist" as const) : ("bubble-5" as const)
+        const details = e.details as
+          | { type: "permission.asked"; properties: PermissionRequest }
+          | { type: "question.asked"; properties: QuestionRequest }
         const directory = e.name
-        const props = e.details.properties
-        if (e.details.type === "permission.asked" && permission.autoResponds(e.details.properties, directory)) return
+        if (details.type === "permission.asked" && permission.autoResponds(details.properties, directory)) return
 
-        const [store] = globalSync.child(directory, { bootstrap: false })
-        const session = store.session.find((s) => s.id === props.sessionID)
-        const sessionKey = `${directory}:${props.sessionID}`
-        if (session?.parentID) return
+        void (async () => {
+          const session = await sessionForAlert(directory, details.properties.sessionID)
+          if (session?.parentID) return
 
-        const sessionTitle = session?.title ?? language.t("command.session.new")
-        const projectName = getFilename(directory)
-        const description =
-          e.details.type === "permission.asked"
-            ? language.t("notification.permission.description", { sessionTitle, projectName })
-            : language.t("notification.question.description", { sessionTitle, projectName })
-        const href = `/${base64Encode(directory)}/session/${props.sessionID}`
+          const title =
+            details.type === "permission.asked"
+              ? language.t("notification.permission.title")
+              : language.t("notification.question.title")
+          const icon = details.type === "permission.asked" ? ("checklist" as const) : ("bubble-5" as const)
+          const sessionKey = `${directory}:${details.properties.sessionID}`
+          const sessionTitle = session?.title ?? language.t("command.session.new")
+          const projectName = getFilename(directory)
+          const description =
+            details.type === "permission.asked"
+              ? language.t("notification.permission.description", { sessionTitle, projectName })
+              : language.t("notification.question.description", { sessionTitle, projectName })
+          const href = `/${base64Encode(directory)}/session/${details.properties.sessionID}`
 
-        const now = Date.now()
-        const lastAlerted = alertedAtBySession.get(sessionKey) ?? 0
-        if (now - lastAlerted < cooldownMs) return
-        alertedAtBySession.set(sessionKey, now)
+          const now = Date.now()
+          const lastAlerted = alertedAtBySession.get(sessionKey) ?? 0
+          if (now - lastAlerted < cooldownMs) return
+          alertedAtBySession.set(sessionKey, now)
 
-        if (e.details.type === "permission.asked") {
-          if (settings.sounds.permissionsEnabled()) {
-            void playSoundById(settings.sounds.permissions())
+          if (details.type === "permission.asked") {
+            if (settings.sounds.permissionsEnabled()) {
+              void playSoundById(settings.sounds.permissions())
+            }
+            if (settings.notifications.permissions()) {
+              void platform.notify(title, description, href)
+            }
           }
-          if (settings.notifications.permissions()) {
-            void platform.notify(title, description, href)
+
+          if (details.type === "question.asked") {
+            if (settings.notifications.agent()) {
+              void platform.notify(title, description, href)
+            }
           }
-        }
 
-        if (e.details.type === "question.asked") {
-          if (settings.notifications.agent()) {
-            void platform.notify(title, description, href)
-          }
-        }
+          const currentSession = params.id
+          if (workspaceKey(directory) === workspaceKey(currentDir()) && details.properties.sessionID === currentSession) return
 
-        const currentSession = params.id
-        if (workspaceKey(directory) === workspaceKey(currentDir()) && props.sessionID === currentSession) return
+          dismissSessionAlert(sessionKey)
 
-        dismissSessionAlert(sessionKey)
-
-        const toastId = showToast({
-          persistent: true,
-          icon,
-          title,
-          description,
-          actions: [
-            {
-              label: language.t("notification.action.goToSession"),
-              onClick: () => navigate(href),
-            },
-            {
-              label: language.t("common.dismiss"),
-              onClick: "dismiss",
-            },
-          ],
-        })
-        toastBySession.set(sessionKey, toastId)
+          const toastId = showToast({
+            persistent: true,
+            icon,
+            title,
+            description,
+            actions: [
+              {
+                label: language.t("notification.action.goToSession"),
+                onClick: () => navigate(href),
+              },
+              {
+                label: language.t("common.dismiss"),
+                onClick: "dismiss",
+              },
+            ],
+          })
+          toastBySession.set(sessionKey, toastId)
+        })()
       })
       onCleanup(unsub)
 

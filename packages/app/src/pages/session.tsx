@@ -804,6 +804,7 @@ export default function Page() {
       hiddenAt = 0
       foregroundSyncAt = Date.now()
       untrack(() => {
+        void sync.session.status()
         void sync.session.sync(id, { force: true })
         void sync.session.diff(id, { force: true })
         if ((sync.data.session_status[id]?.type ?? "idle") !== "idle" || sync.data.todo[id] !== undefined) {
