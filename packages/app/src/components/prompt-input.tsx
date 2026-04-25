@@ -545,6 +545,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     (/(iPad|iPhone|iPod)/.test(navigator.userAgent) ||
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1))
 
+  const handleSubmitButtonClick = () => {
+    if (!isIOSWeb) return
+    editorRef.blur()
+  }
+
   const handleBlur = () => {
     closePopover()
     setComposing(false)
@@ -1403,6 +1408,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                   type="submit"
                   disabled={!working() && blank()}
                   tabIndex={store.mode === "normal" ? undefined : -1}
+                  onClick={handleSubmitButtonClick}
                   icon={stopping() ? "stop" : store.mode === "shell" ? "arrow-undo-down" : "arrow-up"}
                   variant="primary"
                   class="size-8"
