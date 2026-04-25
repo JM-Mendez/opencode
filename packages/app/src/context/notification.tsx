@@ -50,7 +50,7 @@ type NotificationIndex = {
 
 const MAX_NOTIFICATIONS = 500
 const NOTIFICATION_TTL_MS = 1000 * 60 * 60 * 24 * 30
-const FALLBACK_NATIVE_SUBAGENTS = new Set(["general", "explore"])
+const SUBAGENT_TITLE_SUFFIX = /\(@.+ subagent\)$/
 
 function pruneNotifications(list: Notification[]) {
   const cutoff = Date.now() - NOTIFICATION_TTL_MS
@@ -117,10 +117,6 @@ export const { use: useNotification, provider: NotificationProvider } = createSi
     const language = useLanguage()
 
     const empty: Notification[] = []
-    const nativeSubagents = {
-      names: undefined as Set<string> | undefined,
-      promise: undefined as Promise<Set<string>> | undefined,
-    }
 
     const currentDirectory = createMemo(() => {
       return decode64(params.dir)
@@ -221,34 +217,9 @@ export const { use: useNotification, provider: NotificationProvider } = createSi
         .catch(() => undefined)
     }
 
-    const loadNativeSubagents = () => {
-      if (nativeSubagents.names) return Promise.resolve(nativeSubagents.names)
-      if (nativeSubagents.promise) return nativeSubagents.promise
-      nativeSubagents.promise = globalSDK.client.app
-        .agents()
-        .then((x) => {
-          const names = new Set(
-            (x.data ?? [])
-              .filter((agent) => agent.native && agent.mode === "subagent")
-              .map((agent) => agent.name),
-          )
-          nativeSubagents.names = names
-          return names
-        })
-        .catch(() => {
-          nativeSubagents.names = FALLBACK_NATIVE_SUBAGENTS
-          return nativeSubagents.names
-        })
-        .finally(() => {
-          nativeSubagents.promise = undefined
-        })
-      return nativeSubagents.promise
-    }
-
-    const isSubagentSession = async (session: { parentID?: string; title: string }) => {
+    const isSubagentSession = (session: { parentID?: string; title: string }) => {
       if (session.parentID) return true
-      const names = await loadNativeSubagents()
-      return [...names].some((name) => session.title.endsWith(`(@${name} subagent)`))
+      return SUBAGENT_TITLE_SUFFIX.test(session.title)
     }
 
     const viewedInCurrentSession = (directory: string, sessionID?: string) => {
@@ -266,27 +237,24 @@ export const { use: useNotification, provider: NotificationProvider } = createSi
       void lookup(directory, sessionID).then((session) => {
         if (meta.disposed) return
         if (!session) return
-        void isSubagentSession(session).then((subagent) => {
-          if (meta.disposed) return
-          if (subagent) return
+        if (isSubagentSession(session)) return
 
-          if (settings.sounds.agentEnabled()) {
-            void playSoundById(settings.sounds.agent())
-          }
+        if (settings.sounds.agentEnabled()) {
+          void playSoundById(settings.sounds.agent())
+        }
 
-          append({
-            directory,
-            time,
-            viewed: viewedInCurrentSession(directory, sessionID),
-            type: "turn-complete",
-            session: sessionID,
-          })
-
-          const href = `/${base64Encode(directory)}/session/${sessionID}`
-          if (settings.notifications.agent()) {
-            void platform.notify(language.t("notification.session.responseReady.title"), session.title ?? sessionID, href)
-          }
+        append({
+          directory,
+          time,
+          viewed: viewedInCurrentSession(directory, sessionID),
+          type: "turn-complete",
+          session: sessionID,
         })
+
+        const href = `/${base64Encode(directory)}/session/${sessionID}`
+        if (settings.notifications.agent()) {
+          void platform.notify(language.t("notification.session.responseReady.title"), session.title ?? sessionID, href)
+        }
       })
     }
 
@@ -298,7 +266,7 @@ export const { use: useNotification, provider: NotificationProvider } = createSi
       const sessionID = event.properties.sessionID
       void lookup(directory, sessionID).then((session) => {
         if (meta.disposed) return
-        if (session?.parentID) return
+        if (session && isSubagentSession(session)) return
 
         if (settings.sounds.errorsEnabled()) {
           void playSoundById(settings.sounds.errors())
