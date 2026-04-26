@@ -53,6 +53,7 @@ import { retry } from "@opencode-ai/shared/util/retry"
 import { playSoundById } from "@/utils/sound"
 import { createAim } from "@/utils/aim"
 import { setNavigate } from "@/utils/notification-click"
+import { sessionTitle } from "@/utils/session-title"
 import { LAST_VISITED_PATH_KEY, persistablePath } from "@/utils/startup-route"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { setSessionHandoff } from "@/pages/session/handoff"
@@ -528,12 +529,12 @@ export default function Layout(props: ParentProps) {
               : language.t("notification.question.title")
           const icon = details.type === "permission.asked" ? ("checklist" as const) : ("bubble-5" as const)
           const sessionKey = `${directory}:${details.properties.sessionID}`
-          const sessionTitle = session?.title ?? language.t("command.session.new")
+          const sessionLabel = sessionTitle(session?.title) ?? language.t("command.session.new")
           const projectName = getFilename(directory)
           const description =
             details.type === "permission.asked"
-              ? language.t("notification.permission.description", { sessionTitle, projectName })
-              : language.t("notification.question.description", { sessionTitle, projectName })
+              ? language.t("notification.permission.description", { sessionTitle: sessionLabel, projectName })
+              : language.t("notification.question.description", { sessionTitle: sessionLabel, projectName })
           const href = `/${base64Encode(directory)}/session/${details.properties.sessionID}`
 
           const now = Date.now()

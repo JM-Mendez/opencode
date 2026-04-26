@@ -446,7 +446,7 @@ export function SessionHeader() {
                     disabled={refreshing()}
                     aria-label={language.t("common.refresh")}
                   >
-                    <Show when={refreshing()} fallback={<Icon size="small" name="reset" />}>
+                    <Show when={refreshing()} fallback={<Icon size="small" name="reload" />}>
                       <Spinner class="size-3.5" />
                     </Show>
                   </Button>

@@ -287,7 +287,7 @@ export const { use: useNotification, provider: NotificationProvider } = createSi
           error,
         })
         const description =
-          session?.title ??
+          sessionTitle(session?.title) ??
           (typeof error === "string" ? error : language.t("notification.session.error.fallbackDescription"))
         const href = sessionID ? `/${base64Encode(directory)}/session/${sessionID}` : `/${base64Encode(directory)}`
         if (settings.notifications.errors()) {
