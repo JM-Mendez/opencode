@@ -1,6 +1,8 @@
 import { Show, createEffect, createMemo, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useNavigate } from "@solidjs/router"
+import { Button } from "@opencode-ai/ui/button"
+import { DockTray } from "@opencode-ai/ui/dock-surface"
 import { useSpring } from "@opencode-ai/ui/motion-spring"
 import { PromptInput } from "@/components/prompt-input"
 import { useLanguage } from "@/context/language"
@@ -15,6 +17,7 @@ import { SessionRevertDock } from "@/pages/session/composer/session-revert-dock"
 import type { SessionComposerState } from "@/pages/session/composer/session-composer-state"
 import { SessionTodoDock } from "@/pages/session/composer/session-todo-dock"
 import type { FollowupDraft } from "@/components/prompt-input/submit"
+import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 
 export function SessionComposerRegion(props: {
@@ -50,6 +53,7 @@ export function SessionComposerRegion(props: {
   const language = useLanguage()
   const route = useSessionKey()
   const sync = useSync()
+  const isDesktop = createMediaQuery("(min-width: 768px)")
 
   const handoffPrompt = createMemo(() => getSessionHandoff(route.sessionKey())?.prompt)
   const info = createMemo(() => (route.params.id ? sync.session.get(route.params.id) : undefined))
@@ -78,6 +82,7 @@ export function SessionComposerRegion(props: {
     ready: false,
     height: 320,
     body: undefined as HTMLDivElement | undefined,
+    collapsedQuestionID: undefined as string | undefined,
   })
   let timer: number | undefined
   let frame: number | undefined
@@ -120,12 +125,21 @@ export function SessionComposerRegion(props: {
   const rolled = createMemo(() => (props.revert?.items.length ? props.revert : undefined))
   const lift = createMemo(() => (rolled() ? 18 : 36 * value()))
   const full = createMemo(() => Math.max(78, store.height))
+  const questionCollapsed = createMemo(
+    () => !isDesktop() && store.collapsedQuestionID === props.state.questionRequest()?.id,
+  )
 
   const openParent = () => {
     const id = parentID()
     if (!id) return
     navigate(`/${route.params.dir}/session/${id}`)
   }
+
+  createEffect(() => {
+    const id = props.state.questionRequest()?.id
+    if (!store.collapsedQuestionID || store.collapsedQuestionID === id) return
+    setStore("collapsedQuestionID", undefined)
+  })
 
   createEffect(() => {
     const el = store.body
@@ -149,9 +163,29 @@ export function SessionComposerRegion(props: {
       >
         <Show when={props.state.questionRequest()} keyed>
           {(request) => (
-            <div>
-              <SessionQuestionDock request={request} onSubmit={props.onResponseSubmit} />
-            </div>
+            <Show
+              when={!questionCollapsed()}
+              fallback={
+                <DockTray class="md:hidden mb-2">
+                  <div class="px-3 py-2 flex items-center justify-between gap-3">
+                    <span class="min-w-0 text-14-medium text-text-strong truncate">
+                      {language.t("ui.tool.questions")}
+                    </span>
+                    <Button variant="secondary" size="small" onClick={() => setStore("collapsedQuestionID", undefined)}>
+                      {language.t("session.todo.expand")}
+                    </Button>
+                  </div>
+                </DockTray>
+              }
+            >
+              <div>
+                <SessionQuestionDock
+                  request={request}
+                  onSubmit={props.onResponseSubmit}
+                  onMobileCollapse={() => setStore("collapsedQuestionID", request.id)}
+                />
+              </div>
+            </Show>
           )}
         </Show>
 

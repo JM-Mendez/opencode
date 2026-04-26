@@ -10,6 +10,7 @@ import type { QuestionAnswer, QuestionRequest } from "@opencode-ai/sdk/v2"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
 import { makeEventListener } from "@solid-primitives/event-listener"
+import { createMediaQuery } from "@solid-primitives/media"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 
 const cache = new Map<string, { tab: number; answers: QuestionAnswer[]; custom: string[]; customOn: boolean[] }>()
@@ -59,9 +60,14 @@ function Option(props: {
   )
 }
 
-export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit: () => void }> = (props) => {
+export const SessionQuestionDock: Component<{
+  request: QuestionRequest
+  onSubmit: () => void
+  onMobileCollapse?: () => void
+}> = (props) => {
   const sdk = useSDK()
   const language = useLanguage()
+  const isDesktop = createMediaQuery("(min-width: 768px)")
 
   const questions = createMemo(() => props.request.questions)
   const total = createMemo(() => questions().length)
@@ -445,6 +451,10 @@ export const SessionQuestionDock: Component<{ request: QuestionRequest; onSubmit
 
   const jump = (tab: number) => {
     if (sending()) return
+    if (!isDesktop() && props.onMobileCollapse) {
+      props.onMobileCollapse()
+      return
+    }
     setStore("tab", tab)
     setStore("editing", false)
     focus(pickFocus(tab))
