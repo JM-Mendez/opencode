@@ -499,6 +499,27 @@ export default function Page() {
     ),
   )
 
+  let lastAgentSwitch: string | undefined
+  const unsubscribeAgentSwitch = sdk.event.on("message.part.updated", (evt) => {
+    const part = evt.properties.part
+    if (part.type !== "tool") return
+    if (part.sessionID !== params.id) return
+    if (part.state.status !== "completed") return
+    if (part.id === lastAgentSwitch) return
+
+    if (part.tool === "plan_exit") {
+      local.agent.set("build")
+      lastAgentSwitch = part.id
+      return
+    }
+
+    if (part.tool === "plan_enter") {
+      local.agent.set("plan")
+      lastAgentSwitch = part.id
+    }
+  })
+  onCleanup(unsubscribeAgentSwitch)
+
   createEffect(
     on(
       () => ({ dir: params.dir, id: params.id }),
