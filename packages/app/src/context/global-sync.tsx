@@ -113,6 +113,11 @@ function createGlobalSync() {
     setGlobalStore("session_todo", sessionID, reconcile(todos, { key: "id" }))
   }
 
+  const invalidateSessions = (directory: string) => {
+    sessionMeta.delete(directory)
+    void queryClient.invalidateQueries({ queryKey: loadSessionsQuery(directory).queryKey })
+  }
+
   const paused = () => untrack(() => globalStore.reload) !== undefined
 
   const queue = createRefreshQueue({
@@ -363,6 +368,7 @@ function createGlobalSync() {
       foregroundRefreshAt = Date.now()
       queue.refresh()
       for (const directory of Object.keys(children.children)) {
+        invalidateSessions(directory)
         queue.push(directory)
       }
     }
@@ -418,6 +424,7 @@ function createGlobalSync() {
     await bootstrap()
     queue.refresh()
     for (const directory of Object.keys(children.children)) {
+      invalidateSessions(directory)
       queue.push(directory)
     }
   }

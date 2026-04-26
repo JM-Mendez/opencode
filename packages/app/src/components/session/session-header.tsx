@@ -243,8 +243,18 @@ export function SessionHeader() {
   const refresh = () => {
     if (refreshing()) return
     setRefreshing(true)
-    void globalSync
-      .refresh()
+    const id = params.id
+    void Promise.all([
+      globalSync.refresh(),
+      id
+        ? Promise.all([
+            sync.session.status(),
+            sync.session.sync(id, { force: true }),
+            sync.session.diff(id, { force: true }),
+            sync.session.todo(id, { force: true }),
+          ])
+        : Promise.resolve(),
+    ])
       .catch((err: unknown) => showRequestError(language, err))
       .finally(() => setRefreshing(false))
   }
