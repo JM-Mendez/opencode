@@ -226,11 +226,28 @@ export default function Layout(props: ParentProps) {
       if (document.visibilityState !== "hidden") return
       reset()
     }
+    const publishFocus = () => {
+      const directory = currentDir()
+      if (!directory) return
+      void globalSDK.client.tui.publish({
+        directory,
+        body: {
+          type: "tui.window.focus",
+          properties: {
+            focused: document.visibilityState === "visible" && document.hasFocus(),
+          },
+        } as any,
+      })
+    }
     makeEventListener(window, "pointerup", stop)
     makeEventListener(window, "pointercancel", stop)
     makeEventListener(window, "blur", stop)
     makeEventListener(window, "blur", blur)
+    makeEventListener(window, "blur", publishFocus)
+    makeEventListener(window, "focus", publishFocus)
     makeEventListener(document, "visibilitychange", hide)
+    makeEventListener(document, "visibilitychange", publishFocus)
+    publishFocus()
   })
 
   const sidebarHovering = createMemo(() => !layout.sidebar.opened() && state.hoverProject !== undefined)

@@ -39,6 +39,12 @@ export const TuiEvent = {
       duration: Schema.optional(Schema.Number).annotate({ description: "Duration in milliseconds" }),
     }),
   ),
+  WindowFocus: BusEvent.define(
+    "tui.window.focus",
+    Schema.Struct({
+      focused: Schema.Boolean,
+    }),
+  ),
   SessionSelect: BusEvent.define(
     "tui.session.select",
     Schema.Struct({
