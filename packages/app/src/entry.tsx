@@ -73,8 +73,7 @@ const notify: Platform["notify"] = async (title, description, href) => {
 
   if (permission !== "granted") return
 
-  const inView = document.visibilityState === "visible" && document.hasFocus()
-  if (inView) return
+  if (document.visibilityState === "visible") return
 
   const notification = new Notification(title, {
     body: description ?? "",

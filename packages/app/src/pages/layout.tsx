@@ -537,6 +537,9 @@ export default function Layout(props: ParentProps) {
               : language.t("notification.question.description", { sessionTitle: sessionLabel, projectName })
           const href = `/${base64Encode(directory)}/session/${details.properties.sessionID}`
 
+          const currentSession = params.id
+          if (workspaceKey(directory) === workspaceKey(currentDir()) && details.properties.sessionID === currentSession) return
+
           const now = Date.now()
           const lastAlerted = alertedAtBySession.get(sessionKey) ?? 0
           if (now - lastAlerted < cooldownMs) return
@@ -556,9 +559,6 @@ export default function Layout(props: ParentProps) {
               void platform.notify(title, description, href)
             }
           }
-
-          const currentSession = params.id
-          if (workspaceKey(directory) === workspaceKey(currentDir()) && details.properties.sessionID === currentSession) return
 
           dismissSessionAlert(sessionKey)
 
