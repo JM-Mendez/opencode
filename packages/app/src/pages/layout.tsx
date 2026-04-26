@@ -53,7 +53,6 @@ import { retry } from "@opencode-ai/core/util/retry"
 import { playSoundById } from "@/utils/sound"
 import { createAim } from "@/utils/aim"
 import { setNavigate } from "@/utils/notification-click"
-import { sessionTitle } from "@/utils/session-title"
 import { LAST_VISITED_PATH_KEY, persistablePath } from "@/utils/startup-route"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { setSessionHandoff } from "@/pages/session/handoff"
@@ -227,28 +226,11 @@ export default function Layout(props: ParentProps) {
       if (document.visibilityState !== "hidden") return
       reset()
     }
-    const publishFocus = () => {
-      const directory = currentDir()
-      if (!directory) return
-      void globalSDK.client.tui.publish({
-        directory,
-        body: {
-          type: "tui.window.focus",
-          properties: {
-            focused: document.visibilityState === "visible" && document.hasFocus(),
-          },
-        } as any,
-      })
-    }
     makeEventListener(window, "pointerup", stop)
     makeEventListener(window, "pointercancel", stop)
     makeEventListener(window, "blur", stop)
     makeEventListener(window, "blur", blur)
-    makeEventListener(window, "blur", publishFocus)
-    makeEventListener(window, "focus", publishFocus)
     makeEventListener(document, "visibilitychange", hide)
-    makeEventListener(document, "visibilitychange", publishFocus)
-    publishFocus()
   })
 
   const sidebarHovering = createMemo(() => !layout.sidebar.opened() && state.hoverProject !== undefined)
@@ -529,12 +511,12 @@ export default function Layout(props: ParentProps) {
               : language.t("notification.question.title")
           const icon = details.type === "permission.asked" ? ("checklist" as const) : ("bubble-5" as const)
           const sessionKey = `${directory}:${details.properties.sessionID}`
-          const sessionLabel = sessionTitle(session?.title) ?? language.t("command.session.new")
+          const sessionTitle = session?.title ?? language.t("command.session.new")
           const projectName = getFilename(directory)
           const description =
             details.type === "permission.asked"
-              ? language.t("notification.permission.description", { sessionTitle: sessionLabel, projectName })
-              : language.t("notification.question.description", { sessionTitle: sessionLabel, projectName })
+              ? language.t("notification.permission.description", { sessionTitle, projectName })
+              : language.t("notification.question.description", { sessionTitle, projectName })
           const href = `/${base64Encode(directory)}/session/${details.properties.sessionID}`
 
           const currentSession = params.id
