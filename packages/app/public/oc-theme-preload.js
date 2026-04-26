@@ -1,6 +1,6 @@
 ;(function () {
   var key = "opencode-theme-id"
-  var themeId = localStorage.getItem(key) || "oc-2"
+  var themeId = localStorage.getItem(key) || "vercel"
 
   if (themeId === "oc-1") {
     themeId = "oc-2"
@@ -16,9 +16,16 @@
   document.documentElement.dataset.theme = themeId
   document.documentElement.dataset.colorScheme = mode
 
-  if (themeId === "oc-2") return
-
-  var css = localStorage.getItem("opencode-theme-css-" + mode)
+  var css =
+    themeId === "oc-2"
+      ? isDark
+        ? "--background-base:#101010;--background-weak:#1e1e1e;--background-strong:#121212;--background-stronger:#151515;"
+        : "--background-base:#f8f8f8;--background-weak:#f3f3f3;--background-strong:#fcfcfc;--background-stronger:#fcfcfc;"
+      : themeId === "vercel"
+        ? isDark
+          ? "--background-base:#000000;--background-weak:#101010;--background-strong:#000000;--background-stronger:#151515;"
+          : "--background-base:#ffffff;--background-weak:#f3f3f3;--background-strong:#ffffff;--background-stronger:#fcfcfc;"
+        : localStorage.getItem("opencode-theme-css-" + mode)
   if (css) {
     var style = document.createElement("style")
     style.id = "oc-theme-preload"
@@ -29,7 +36,7 @@
       (isDark ? "plus-lighter" : "multiply") +
       ";" +
       css +
-      "}"
+      "}body{background:var(--background-base)}"
     document.head.appendChild(style)
   }
 })()

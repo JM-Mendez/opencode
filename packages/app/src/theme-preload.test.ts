@@ -31,7 +31,15 @@ describe("theme preload", () => {
     expect(localStorage.getItem("opencode-theme-id")).toBe("oc-2")
     expect(localStorage.getItem("opencode-theme-css-light")).toBeNull()
     expect(localStorage.getItem("opencode-theme-css-dark")).toBeNull()
-    expect(document.getElementById("oc-theme-preload")).toBeNull()
+    expect(document.getElementById("oc-theme-preload")?.textContent).toContain("--background-base:#101010;")
+  })
+
+  test("preloads default theme colors before mount", () => {
+    run()
+
+    expect(document.documentElement.dataset.theme).toBe("vercel")
+    expect(document.documentElement.dataset.colorScheme).toBe("dark")
+    expect(document.getElementById("oc-theme-preload")?.textContent).toContain("--background-base:#000000;")
   })
 
   test("keeps cached css for non-default themes", () => {

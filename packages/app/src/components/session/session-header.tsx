@@ -12,6 +12,7 @@ import { createEffect, createMemo, createSignal, For, onMount, Show } from "soli
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
 import { useCommand } from "@/context/command"
+import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
@@ -135,6 +136,7 @@ export function SessionHeader() {
   const server = useServer()
   const platform = usePlatform()
   const language = useLanguage()
+  const globalSync = useGlobalSync()
   const settings = useSettings()
   const sync = useSync()
   const terminal = useTerminal()
@@ -219,6 +221,7 @@ export function SessionHeader() {
   const [openRequest, setOpenRequest] = createStore({
     app: undefined as OpenApp | undefined,
   })
+  const [refreshing, setRefreshing] = createSignal(false)
 
   const canOpen = createMemo(() => platform.platform === "desktop" && !!platform.openPath && server.isLocal())
   const current = createMemo(
@@ -235,6 +238,15 @@ export function SessionHeader() {
   const selectApp = (app: OpenApp) => {
     if (!options().some((item) => item.id === app)) return
     setPrefs("app", app)
+  }
+
+  const refresh = () => {
+    if (refreshing()) return
+    setRefreshing(true)
+    void globalSync
+      .refresh()
+      .catch((err: unknown) => showRequestError(language, err))
+      .finally(() => setRefreshing(false))
   }
 
   const openDir = (app: OpenApp) => {
@@ -426,6 +438,19 @@ export function SessionHeader() {
                 </div>
               </Show>
               <div class="flex items-center gap-1">
+                <Tooltip placement="bottom" value={language.t("common.refresh")}>
+                  <Button
+                    variant="ghost"
+                    class="titlebar-icon w-8 h-6 p-0 box-border shrink-0"
+                    onClick={refresh}
+                    disabled={refreshing()}
+                    aria-label={language.t("common.refresh")}
+                  >
+                    <Show when={refreshing()} fallback={<Icon size="small" name="reset" />}>
+                      <Spinner class="size-3.5" />
+                    </Show>
+                  </Button>
+                </Tooltip>
                 <Show when={status()}>
                   <Tooltip placement="bottom" value={language.t("status.popover.trigger")}>
                     <StatusPopover />

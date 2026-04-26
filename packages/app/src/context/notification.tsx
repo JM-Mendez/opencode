@@ -13,6 +13,7 @@ import { decode64 } from "@/utils/base64"
 import { EventSessionError } from "@opencode-ai/sdk/v2"
 import { Persist, persisted } from "@/utils/persist"
 import { playSoundById } from "@/utils/sound"
+import { sessionTitle } from "@/utils/session-title"
 
 type NotificationBase = {
   directory?: string
@@ -253,7 +254,11 @@ export const { use: useNotification, provider: NotificationProvider } = createSi
 
         const href = `/${base64Encode(directory)}/session/${sessionID}`
         if (settings.notifications.agent()) {
-          void platform.notify(language.t("notification.session.responseReady.title"), session.title ?? sessionID, href)
+          void platform.notify(
+            language.t("notification.session.responseReady.title"),
+            sessionTitle(session.title) ?? language.t("command.session.new"),
+            href,
+          )
         }
       })
     }

@@ -414,6 +414,14 @@ function createGlobalSync() {
       })
   }
 
+  const refresh = async () => {
+    await bootstrap()
+    queue.refresh()
+    for (const directory of Object.keys(children.children)) {
+      queue.push(directory)
+    }
+  }
+
   return {
     data: globalStore,
     set,
@@ -426,6 +434,7 @@ function createGlobalSync() {
     child: children.child,
     peek: children.peek,
     bootstrap,
+    refresh,
     updateConfig,
     project: projectApi,
     todo: {
