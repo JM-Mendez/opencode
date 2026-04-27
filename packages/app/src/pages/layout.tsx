@@ -1334,14 +1334,28 @@ export default function Layout(props: ParentProps) {
     return root
   }
 
-  async function navigateToProject(directory: string | undefined) {
+  async function navigateToProject(
+    directory: string | undefined,
+    options?: { restoreSession?: boolean; closeMobileSidebar?: boolean },
+  ) {
     if (!directory) return
     const root = projectRoot(directory)
+    const navigateProjectRoute = (href: string) => {
+      clearSidebarHoverState()
+      navigate(href)
+      if (options?.closeMobileSidebar ?? true) layout.mobileSidebar.hide()
+    }
     server.projects.touch(root)
     const project = layout.projects.list().find((item) => item.worktree === root)
     let dirs = project
       ? effectiveWorkspaceOrder(root, [root, ...(project.sandboxes ?? [])], store.workspaceOrder[root])
       : [root]
+
+    if (options?.restoreSession === false) {
+      navigateProjectRoute(`/${base64Encode(root)}/session`)
+      return
+    }
+
     const canOpen = (value: string | undefined) => {
       if (!value) return false
       return dirs.some((item) => workspaceKey(item) === workspaceKey(value))
@@ -1360,7 +1374,7 @@ export default function Layout(props: ParentProps) {
       const [data] = globalSync.child(target.directory, { bootstrap: false })
       if (data.session.some((item) => item.id === target.id)) {
         setStore("lastProjectSession", root, { directory: target.directory, id: target.id, at: Date.now() })
-        navigateWithSidebarReset(`/${base64Encode(target.directory)}/session/${target.id}`)
+        navigateProjectRoute(`/${base64Encode(target.directory)}/session/${target.id}`)
         return true
       }
       const resolved = await globalSDK.client.session
@@ -1370,7 +1384,7 @@ export default function Layout(props: ParentProps) {
       if (!resolved?.directory) return false
       if (!canOpen(resolved.directory)) return false
       setStore("lastProjectSession", root, { directory: resolved.directory, id: resolved.id, at: Date.now() })
-      navigateWithSidebarReset(`/${base64Encode(resolved.directory)}/session/${resolved.id}`)
+      navigateProjectRoute(`/${base64Encode(resolved.directory)}/session/${resolved.id}`)
       return true
     }
 
@@ -1406,7 +1420,7 @@ export default function Layout(props: ParentProps) {
       return
     }
 
-    navigateWithSidebarReset(`/${base64Encode(root)}/session`)
+    navigateProjectRoute(`/${base64Encode(root)}/session`)
   }
 
   function navigateToSession(session: Session | undefined) {

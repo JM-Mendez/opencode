@@ -23,7 +23,7 @@ export type ProjectSidebarContext = {
   onProjectMouseLeave: (worktree: string) => void
   onProjectFocus: (worktree: string) => void
   onHoverOpenChanged: (worktree: string, hovered: boolean) => void
-  navigateToProject: (directory: string) => void
+  navigateToProject: (directory: string, options?: ProjectNavigateOptions) => void
   openSidebar: () => void
   closeProject: (directory: string) => void
   showEditProjectDialog: (project: LocalProject) => void
@@ -32,6 +32,11 @@ export type ProjectSidebarContext = {
   workspaceIds: (project: LocalProject) => string[]
   workspaceLabel: (directory: string, branch?: string, projectId?: string) => string
   sessionProps: Omit<SessionItemProps, "session" | "list" | "slug" | "mobile" | "dense">
+}
+
+type ProjectNavigateOptions = {
+  restoreSession?: boolean
+  closeMobileSidebar?: boolean
 }
 
 export const ProjectDragOverlay = (props: {
@@ -62,7 +67,7 @@ const ProjectTile = (props: {
   onProjectMouseEnter: (worktree: string, event: MouseEvent) => void
   onProjectMouseLeave: (worktree: string) => void
   onProjectFocus: (worktree: string) => void
-  navigateToProject: (directory: string) => void
+  navigateToProject: (directory: string, options?: ProjectNavigateOptions) => void
   showEditProjectDialog: (project: LocalProject) => void
   toggleProjectWorkspaces: (project: LocalProject) => void
   workspacesEnabled: (project: LocalProject) => boolean
@@ -139,7 +144,10 @@ const ProjectTile = (props: {
             layout.sidebar.toggle()
             return
           }
-          props.navigateToProject(props.project.worktree)
+          props.navigateToProject(
+            props.project.worktree,
+            props.mobile ? { restoreSession: false, closeMobileSidebar: false } : undefined,
+          )
         }}
         onBlur={() => props.setOpen(false)}
       >
