@@ -3,9 +3,15 @@ import { persistablePath, resolveStartupPath } from "./startup-route"
 
 describe("resolveStartupPath", () => {
   test("restores a saved in-app path from root", () => {
-    expect(resolveStartupPath("/", "/workspace/session/123?tab=files#diff", "https://tail.example.ts.net")).toBe(
-      "/workspace/session/123?tab=files#diff",
+    expect(resolveStartupPath("/", "/settings?tab=providers", "https://tail.example.ts.net")).toBe(
+      "/settings?tab=providers",
     )
+  })
+
+  test("does not restore a saved directory session route from root", () => {
+    expect(
+      resolveStartupPath("/", "/VXNlcnMvam9obi9wcm9qZWN0/session/ses_123", "https://tail.example.ts.net"),
+    ).toBeUndefined()
   })
 
   test("does not override an explicit non-root URL", () => {

@@ -16,6 +16,7 @@ export function resolveStartupPath(current: string, stored: string | null, origi
   if (!stored) return
   const next = normalizeLocalPath(stored, origin)
   if (!next || next === "/") return
+  if (/^\/[^/]+\/session\//.test(next)) return
   return next
 }
 
