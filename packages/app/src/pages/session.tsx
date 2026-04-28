@@ -50,11 +50,12 @@ import {
   focusTerminalById,
   shouldFocusTerminalOnKeyDown,
 } from "@/pages/session/helpers"
+import { FileTabContent } from "@/pages/session/file-tabs"
 import { MessageTimeline } from "@/pages/session/message-timeline"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { syncSessionModel } from "@/pages/session/session-model-helpers"
-import { SessionSidePanel } from "@/pages/session/session-side-panel"
+import { SessionFileTree, SessionSidePanel } from "@/pages/session/session-side-panel"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
@@ -534,7 +535,7 @@ export default function Page() {
 
   const [store, setStore] = createStore({
     messageId: undefined as string | undefined,
-    mobileTab: "session" as "session" | "changes",
+    mobileTab: "session" as "session" | "changes" | "files",
     changes: "git" as ChangeMode,
     newSessionWorktree: "main",
     deferRender: false,
@@ -604,11 +605,11 @@ export default function Page() {
     list.push("turn")
     return list
   })
-  const mobileChanges = createMemo(() => !isDesktop() && store.mobileTab === "changes")
+  const mobileFallbackOpen = createMemo(() => !isDesktop() && store.mobileTab !== "session")
   const wantsReview = createMemo(() =>
     isDesktop()
       ? desktopFileTreeOpen() || (desktopReviewOpen() && activeTab() === "review")
-      : store.mobileTab === "changes",
+      : store.mobileTab === "changes" || store.mobileTab === "files",
   )
   const vcsMode = createMemo<VcsMode | undefined>(() => {
     if (store.changes === "git" || store.changes === "branch") return store.changes
@@ -1260,10 +1261,26 @@ export default function Page() {
     return true
   }
 
-  const focusReviewDiff = (path: string) => {
-    openReviewPanel()
+  const setReviewDiff = (path: string) => {
     view().review.openPath(path)
     setTree({ activeDiff: path, pendingDiff: path })
+  }
+
+  const focusReviewDiff = (path: string) => {
+    openReviewPanel()
+    setReviewDiff(path)
+  }
+
+  const focusMobileReviewDiff = (path: string) => {
+    setStore("mobileTab", "changes")
+    setReviewDiff(path)
+  }
+
+  const openMobileFile = (path: string) => {
+    const tab = file.tab(path)
+    tabs().open(tab)
+    tabs().setActive(tab)
+    void file.load(path)
   }
 
   createEffect(() => {
@@ -1348,8 +1365,8 @@ export default function Page() {
   let treeDir: string | undefined
   createEffect(() => {
     const dir = sdk.directory
-    if (!isDesktop()) return
-    if (!layout.fileTree.opened()) return
+    if (isDesktop() && !layout.fileTree.opened()) return
+    if (!isDesktop() && store.mobileTab !== "files") return
     if (sync.status === "loading") return
 
     fileTreeTab()
@@ -1357,6 +1374,50 @@ export default function Page() {
     treeDir = dir
     void (refresh ? file.tree.refresh("") : file.tree.list(""))
   })
+
+  const mobileFilesPanel = () => (
+    <div class="h-full flex flex-col overflow-hidden bg-background-stronger">
+      <div
+        class="min-h-0 overflow-hidden group/filetree border-b border-border-weaker-base"
+        classList={{ "flex-1": !activeFileTab(), "h-1/2 shrink-0": !!activeFileTab() }}
+      >
+        <SessionFileTree
+          diffs={reviewDiffs}
+          diffsReady={reviewReady}
+          hasReview={hasReview}
+          reviewCount={reviewCount}
+          activeDiff={tree.activeDiff}
+          onChangedFileClick={focusMobileReviewDiff}
+          onAllFileClick={openMobileFile}
+        />
+      </div>
+      <Show when={activeFileTab()} keyed>
+        {(tab) => (
+          <Tabs value={tab} class="flex-1 min-h-0 overflow-hidden">
+            <FileTabContent tab={tab} />
+          </Tabs>
+        )}
+      </Show>
+    </div>
+  )
+
+  const mobileFallback = () => (
+    <Switch>
+      <Match when={store.mobileTab === "files"}>{mobileFilesPanel()}</Match>
+      <Match when={true}>
+        {reviewContent({
+          diffStyle: "unified",
+          classes: {
+            root: "pb-8",
+            header: "px-4",
+            container: "px-4",
+          },
+          loadingClass: "px-4 py-4 text-text-weak",
+          emptyClass: "h-full pb-64 -mt-4 flex flex-col items-center justify-center text-center gap-6",
+        })}
+      </Match>
+    </Switch>
+  )
 
   createEffect(
     on(
@@ -1853,7 +1914,7 @@ export default function Page() {
             <Tabs.List>
               <Tabs.Trigger
                 value="session"
-                class="!w-1/2 !max-w-none"
+                class="!w-1/3 !max-w-none"
                 classes={{ button: "w-full" }}
                 onClick={() => setStore("mobileTab", "session")}
               >
@@ -1861,13 +1922,21 @@ export default function Page() {
               </Tabs.Trigger>
               <Tabs.Trigger
                 value="changes"
-                class="!w-1/2 !max-w-none !border-r-0"
+                class="!w-1/3 !max-w-none"
                 classes={{ button: "w-full" }}
                 onClick={() => setStore("mobileTab", "changes")}
               >
                 {hasReview()
                   ? language.t("session.review.filesChanged", { count: reviewCount() })
                   : language.t("session.review.change.other")}
+              </Tabs.Trigger>
+              <Tabs.Trigger
+                value="files"
+                class="!w-1/3 !max-w-none !border-r-0"
+                classes={{ button: "w-full" }}
+                onClick={() => setStore("mobileTab", "files")}
+              >
+                {language.t("session.tab.files")}
               </Tabs.Trigger>
             </Tabs.List>
           </Tabs>
@@ -1889,17 +1958,8 @@ export default function Page() {
               <Match when={params.id}>
                 <Show when={messagesReady()}>
                   <MessageTimeline
-                    mobileChanges={mobileChanges()}
-                    mobileFallback={reviewContent({
-                      diffStyle: "unified",
-                      classes: {
-                        root: "pb-8",
-                        header: "px-4",
-                        container: "px-4",
-                      },
-                      loadingClass: "px-4 py-4 text-text-weak",
-                      emptyClass: "h-full pb-64 -mt-4 flex flex-col items-center justify-center text-center gap-6",
-                    })}
+                    mobileChanges={mobileFallbackOpen()}
+                    mobileFallback={mobileFallback()}
                     actions={actions}
                     scroll={ui.scroll}
                     onResumeScroll={resumeScroll}

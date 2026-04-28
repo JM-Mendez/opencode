@@ -523,6 +523,7 @@ export const dict = {
   "home.empty.description": "Get started by opening a local project",
 
   "session.tab.session": "Session",
+  "session.tab.files": "Files",
   "session.tab.review": "Review",
   "session.tab.context": "Context",
   "session.panel.reviewAndFiles": "Review and files",

@@ -21,6 +21,10 @@ const locales = [ar, br, bs, da, de, es, fr, ja, ko, no, pl, ru, th, tr, zh, zht
 const keys = ["command.session.previous.unseen", "command.session.next.unseen"] as const
 
 describe("i18n parity", () => {
+  test("English exposes the mobile files tab label", () => {
+    expect(en["session.tab.files" as keyof typeof en]).toBe("Files")
+  })
+
   test("non-English locales translate targeted unseen session keys", () => {
     for (const locale of locales) {
       for (const key of keys) {
