@@ -10,7 +10,6 @@ import type {
 import { showToast } from "@opencode-ai/ui/toast"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { getFilename } from "@opencode-ai/core/util/path"
-import { makeEventListener } from "@solid-primitives/event-listener"
 import { batch, createContext, getOwner, onCleanup, onMount, type ParentProps, untrack, useContext } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useLanguage } from "@/context/language"
