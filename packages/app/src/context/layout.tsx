@@ -124,6 +124,14 @@ const normalizeSessionTabList = (path: ReturnType<typeof createPathHelpers> | un
   })
 }
 
+const workspaceFavoriteKey = (directory: string) => {
+  const value = directory.replaceAll("\\", "/")
+  const drive = value.match(/^([A-Za-z]:)\/+$/)
+  if (drive) return `${drive[1]}/`
+  if (/^\/+$/i.test(value)) return "/"
+  return value.replace(/\/+$/, "")
+}
+
 const normalizeStoredSessionTabs = (key: string, tabs: SessionTabs) => {
   const path = sessionPath(key)
   return {
@@ -235,6 +243,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           width: DEFAULT_SIDEBAR_WIDTH,
           workspaces: {} as Record<string, boolean>,
           workspacesDefault: false,
+          favoriteWorkspaces: [] as string[],
         },
         terminal: {
           height: DEFAULT_TERMINAL_HEIGHT,
@@ -592,6 +601,23 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
         toggleWorkspaces(directory: string) {
           const current = store.sidebar.workspaces[directory] ?? store.sidebar.workspacesDefault ?? false
           setStore("sidebar", "workspaces", directory, !current)
+        },
+        favoriteWorkspaces: createMemo(() => store.sidebar.favoriteWorkspaces ?? []),
+        favoriteWorkspace(directory: string) {
+          const current = store.sidebar.favoriteWorkspaces ?? []
+          const key = workspaceFavoriteKey(directory)
+          if (current.some((item) => workspaceFavoriteKey(item) === key)) return
+          setStore("sidebar", "favoriteWorkspaces", [directory, ...current])
+        },
+        unfavoriteWorkspace(directory: string) {
+          const key = workspaceFavoriteKey(directory)
+          setStore("sidebar", "favoriteWorkspaces", (current = []) =>
+            current.filter((item) => workspaceFavoriteKey(item) !== key),
+          )
+        },
+        workspaceFavorite(directory: string) {
+          const key = workspaceFavoriteKey(directory)
+          return () => (store.sidebar.favoriteWorkspaces ?? []).some((item) => workspaceFavoriteKey(item) === key)
         },
       },
       terminal: {

@@ -14,6 +14,7 @@ import {
   errorMessage,
   hasProjectPermissions,
   latestRootSession,
+  mobileWorkspaceSections,
   workspaceKey,
 } from "./helpers"
 
@@ -119,6 +120,27 @@ describe("layout workspace helpers", () => {
   test("keeps local first while preserving known order", () => {
     const result = effectiveWorkspaceOrder("/root", ["/root", "/b", "/c"], ["/root", "/c", "/a", "/b"])
     expect(result).toEqual(["/root", "/c", "/b"])
+  })
+
+  test("splits favorites into a mobile-only workspace section", () => {
+    expect(
+      mobileWorkspaceSections({
+        mobile: true,
+        workspaces: ["/repo", "/repo/.worktrees/api", "/repo/.worktrees/ui"],
+        favorites: ["/repo/.worktrees/ui"],
+      }),
+    ).toEqual([
+      { id: "favorites", workspaces: ["/repo/.worktrees/ui"] },
+      { id: "workspaces", workspaces: ["/repo", "/repo/.worktrees/api"] },
+    ])
+
+    expect(
+      mobileWorkspaceSections({
+        mobile: false,
+        workspaces: ["/repo", "/repo/.worktrees/api", "/repo/.worktrees/ui"],
+        favorites: ["/repo/.worktrees/ui"],
+      }),
+    ).toEqual([{ id: "workspaces", workspaces: ["/repo", "/repo/.worktrees/api", "/repo/.worktrees/ui"] }])
   })
 
   test("finds the latest root session across workspaces", () => {

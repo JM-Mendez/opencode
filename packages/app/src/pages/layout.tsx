@@ -70,6 +70,7 @@ import {
   effectiveWorkspaceOrder,
   errorMessage,
   latestRootSession,
+  mobileWorkspaceSections,
   sortedRootSessions,
   workspaceKey,
 } from "./layout/helpers"
@@ -2039,6 +2040,9 @@ export default function Layout(props: ParentProps) {
     isBusy,
     workspaceExpanded: (directory, local) => store.workspaceExpanded[directory] ?? local,
     setWorkspaceExpanded: (directory, value) => setStore("workspaceExpanded", directory, value),
+    workspaceFavorite: (directory) => layout.sidebar.workspaceFavorite(directory)(),
+    favoriteWorkspace: layout.sidebar.favoriteWorkspace,
+    unfavoriteWorkspace: layout.sidebar.unfavoriteWorkspace,
     showResetWorkspaceDialog: (root, directory) =>
       dialog.show(() => <DialogResetWorkspace root={root} directory={directory} />),
     showDeleteWorkspaceDialog: (root, directory) =>
@@ -2324,15 +2328,32 @@ export default function Layout(props: ParentProps) {
                           class="size-full flex flex-col py-2 gap-4 overflow-y-auto no-scrollbar [overflow-anchor:none]"
                         >
                           <SortableProvider ids={workspaces()}>
-                            <For each={workspaces()}>
-                              {(directory) => (
-                                <SortableWorkspace
-                                  ctx={workspaceSidebarCtx}
-                                  directory={directory}
-                                  project={project()}
-                                  sortNow={sortNow}
-                                  mobile={panelProps.mobile}
-                                />
+                            <For
+                              each={mobileWorkspaceSections({
+                                mobile: panelProps.mobile,
+                                workspaces: workspaces(),
+                                favorites: layout.sidebar.favoriteWorkspaces(),
+                              })}
+                            >
+                              {(section) => (
+                                <div class="flex flex-col gap-1">
+                                  <Show when={panelProps.mobile && section.id === "favorites"}>
+                                    <div class="px-3 pb-1 text-12-medium text-text-weak">
+                                      {language.t("sidebar.favorites")}
+                                    </div>
+                                  </Show>
+                                  <For each={section.workspaces}>
+                                    {(directory) => (
+                                      <SortableWorkspace
+                                        ctx={workspaceSidebarCtx}
+                                        directory={directory}
+                                        project={project()}
+                                        sortNow={sortNow}
+                                        mobile={panelProps.mobile}
+                                      />
+                                    )}
+                                  </For>
+                                </div>
                               )}
                             </For>
                           </SortableProvider>

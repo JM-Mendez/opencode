@@ -49,6 +49,9 @@ export type WorkspaceSidebarContext = {
   isBusy: (directory: string) => boolean
   workspaceExpanded: (directory: string, local: boolean) => boolean
   setWorkspaceExpanded: (directory: string, value: boolean) => void
+  workspaceFavorite: (directory: string) => boolean
+  favoriteWorkspace: (directory: string) => void
+  unfavoriteWorkspace: (directory: string) => void
   showResetWorkspaceDialog: (root: string, directory: string) => void
   showDeleteWorkspaceDialog: (root: string, directory: string) => void
   setScrollContainerRef: (el: HTMLDivElement | undefined, mobile?: boolean) => void
@@ -140,8 +143,12 @@ const WorkspaceActions = (props: {
   busy: Accessor<boolean>
   menuOpen: Accessor<boolean>
   pendingRename: Accessor<boolean>
+  favorite: Accessor<boolean>
+  mobile?: boolean
   setMenuOpen: (open: boolean) => void
   setPendingRename: (value: boolean) => void
+  favoriteWorkspace: () => void
+  unfavoriteWorkspace: () => void
   sidebarHovering: Accessor<boolean>
   touch: Accessor<boolean>
   language: ReturnType<typeof useLanguage>
@@ -187,6 +194,15 @@ const WorkspaceActions = (props: {
             props.openEditor(`workspace:${props.directory}`, props.workspaceValue())
           }}
         >
+          <Show when={props.mobile}>
+            <DropdownMenu.Item
+              onSelect={() => (props.favorite() ? props.unfavoriteWorkspace() : props.favoriteWorkspace())}
+            >
+              <DropdownMenu.ItemLabel>
+                {props.favorite() ? props.language.t("sidebar.unfavorite") : props.language.t("sidebar.favorite")}
+              </DropdownMenu.ItemLabel>
+            </DropdownMenu.Item>
+          </Show>
           <DropdownMenu.Item
             disabled={props.local()}
             onSelect={() => {
@@ -403,8 +419,12 @@ export const SortableWorkspace = (props: {
                 busy={busy}
                 menuOpen={() => menu.open}
                 pendingRename={() => menu.pendingRename}
+                favorite={() => props.ctx.workspaceFavorite(props.directory)}
+                mobile={props.mobile}
                 setMenuOpen={(open) => setMenu("open", open)}
                 setPendingRename={(value) => setMenu("pendingRename", value)}
+                favoriteWorkspace={() => props.ctx.favoriteWorkspace(props.directory)}
+                unfavoriteWorkspace={() => props.ctx.unfavoriteWorkspace(props.directory)}
                 sidebarHovering={props.ctx.sidebarHovering}
                 touch={touch}
                 language={language}

@@ -95,3 +95,16 @@ export const effectiveWorkspaceOrder = (local: string, dirs: string[], persisted
 
   return [...result, ...live.values()]
 }
+
+export const mobileWorkspaceSections = (input: { mobile?: boolean; workspaces: string[]; favorites: string[] }) => {
+  if (!input.mobile) return [{ id: "workspaces", workspaces: input.workspaces }]
+
+  const favoriteKeys = new Set(input.favorites.map(workspaceKey))
+  const favorites = input.workspaces.filter((directory) => favoriteKeys.has(workspaceKey(directory)))
+  if (favorites.length === 0) return [{ id: "workspaces", workspaces: input.workspaces }]
+
+  return [
+    { id: "favorites", workspaces: favorites },
+    { id: "workspaces", workspaces: input.workspaces.filter((directory) => !favoriteKeys.has(workspaceKey(directory))) },
+  ]
+}
