@@ -124,14 +124,6 @@ const normalizeSessionTabList = (path: ReturnType<typeof createPathHelpers> | un
   })
 }
 
-const workspaceFavoriteKey = (directory: string) => {
-  const value = directory.replaceAll("\\", "/")
-  const drive = value.match(/^([A-Za-z]:)\/+$/)
-  if (drive) return `${drive[1]}/`
-  if (/^\/+$/i.test(value)) return "/"
-  return value.replace(/\/+$/, "")
-}
-
 const normalizeStoredSessionTabs = (key: string, tabs: SessionTabs) => {
   const path = sessionPath(key)
   return {
@@ -243,7 +235,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           width: DEFAULT_SIDEBAR_WIDTH,
           workspaces: {} as Record<string, boolean>,
           workspacesDefault: false,
-          favoriteWorkspaces: [] as string[],
+          favoriteSessions: [] as string[],
         },
         terminal: {
           height: DEFAULT_TERMINAL_HEIGHT,
@@ -602,22 +594,17 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           const current = store.sidebar.workspaces[directory] ?? store.sidebar.workspacesDefault ?? false
           setStore("sidebar", "workspaces", directory, !current)
         },
-        favoriteWorkspaces: createMemo(() => store.sidebar.favoriteWorkspaces ?? []),
-        favoriteWorkspace(directory: string) {
-          const current = store.sidebar.favoriteWorkspaces ?? []
-          const key = workspaceFavoriteKey(directory)
-          if (current.some((item) => workspaceFavoriteKey(item) === key)) return
-          setStore("sidebar", "favoriteWorkspaces", [directory, ...current])
+        favoriteSessions: createMemo(() => store.sidebar.favoriteSessions ?? []),
+        favoriteSession(sessionID: string) {
+          const current = store.sidebar.favoriteSessions ?? []
+          if (current.includes(sessionID)) return
+          setStore("sidebar", "favoriteSessions", [sessionID, ...current])
         },
-        unfavoriteWorkspace(directory: string) {
-          const key = workspaceFavoriteKey(directory)
-          setStore("sidebar", "favoriteWorkspaces", (current = []) =>
-            current.filter((item) => workspaceFavoriteKey(item) !== key),
-          )
+        unfavoriteSession(sessionID: string) {
+          setStore("sidebar", "favoriteSessions", (current = []) => current.filter((item) => item !== sessionID))
         },
-        workspaceFavorite(directory: string) {
-          const key = workspaceFavoriteKey(directory)
-          return () => (store.sidebar.favoriteWorkspaces ?? []).some((item) => workspaceFavoriteKey(item) === key)
+        sessionFavorite(sessionID: string) {
+          return () => (store.sidebar.favoriteSessions ?? []).includes(sessionID)
         },
       },
       terminal: {

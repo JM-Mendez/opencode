@@ -24,6 +24,7 @@ import { createStore } from "solid-js/store"
 import { ResizeHandle } from "@opencode-ai/ui/resize-handle"
 import { Select } from "@opencode-ai/ui/select"
 import { Tabs } from "@opencode-ai/ui/tabs"
+import { IconButton } from "@opencode-ai/ui/icon-button"
 import { createAutoScroll } from "@opencode-ai/ui/hooks"
 import { previewSelectedLines } from "@opencode-ai/ui/pierre/selection-bridge"
 import { Button } from "@opencode-ai/ui/button"
@@ -536,6 +537,7 @@ export default function Page() {
   const [store, setStore] = createStore({
     messageId: undefined as string | undefined,
     mobileTab: "session" as "session" | "changes" | "files",
+    mobileFilePreviewOpen: true,
     changes: "git" as ChangeMode,
     newSessionWorktree: "main",
     deferRender: false,
@@ -1280,6 +1282,7 @@ export default function Page() {
     const tab = file.tab(path)
     tabs().open(tab)
     tabs().setActive(tab)
+    setStore("mobileFilePreviewOpen", true)
     void file.load(path)
   }
 
@@ -1379,7 +1382,10 @@ export default function Page() {
     <div class="h-full flex flex-col overflow-hidden bg-background-stronger">
       <div
         class="min-h-0 overflow-hidden group/filetree border-b border-border-weaker-base"
-        classList={{ "flex-1": !activeFileTab(), "h-1/2 shrink-0": !!activeFileTab() }}
+        classList={{
+          "flex-1": !activeFileTab() || !store.mobileFilePreviewOpen,
+          "h-1/3 shrink-0": !!activeFileTab() && store.mobileFilePreviewOpen,
+        }}
       >
         <SessionFileTree
           diffs={reviewDiffs}
@@ -1391,9 +1397,16 @@ export default function Page() {
           onAllFileClick={openMobileFile}
         />
       </div>
-      <Show when={activeFileTab()} keyed>
+      <Show when={store.mobileFilePreviewOpen && activeFileTab()} keyed>
         {(tab) => (
-          <Tabs value={tab} class="flex-1 min-h-0 overflow-hidden">
+          <Tabs value={tab} class="relative flex-1 min-h-0 overflow-hidden">
+            <IconButton
+              icon="close-small"
+              variant="ghost"
+              class="absolute right-3 top-2 z-20 h-7 w-7 rounded-md bg-background-stronger/90"
+              onClick={() => setStore("mobileFilePreviewOpen", false)}
+              aria-label={language.t("common.close")}
+            />
             <FileTabContent tab={tab} />
           </Tabs>
         )}

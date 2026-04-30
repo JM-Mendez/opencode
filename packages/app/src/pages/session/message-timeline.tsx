@@ -29,6 +29,7 @@ import { SessionContextTab } from "@/components/session/session-context-tab"
 import { useGlobalSDK } from "@/context/global-sdk"
 import { usePlatform } from "@/context/platform"
 import { useSettings } from "@/context/settings"
+import { useLayout } from "@/context/layout"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { messageAgentColor } from "@/utils/agent"
@@ -241,6 +242,7 @@ export function MessageTimeline(props: {
   const settings = useSettings()
   const dialog = useDialog()
   const language = useLanguage()
+  const layout = useLayout()
   const { params, sessionKey } = useSessionKey()
   const platform = usePlatform()
 
@@ -904,6 +906,21 @@ export function MessageTimeline(props: {
                                 >
                                   <DropdownMenu.ItemLabel>{language.t("common.rename")}</DropdownMenu.ItemLabel>
                                 </DropdownMenu.Item>
+                                <Show when={!isDesktop()}>
+                                  <DropdownMenu.Item
+                                    onSelect={() =>
+                                      layout.sidebar.sessionFavorite(id)()
+                                        ? layout.sidebar.unfavoriteSession(id)
+                                        : layout.sidebar.favoriteSession(id)
+                                    }
+                                  >
+                                    <DropdownMenu.ItemLabel>
+                                      {layout.sidebar.sessionFavorite(id)()
+                                        ? language.t("sidebar.unfavorite")
+                                        : language.t("sidebar.favorite")}
+                                    </DropdownMenu.ItemLabel>
+                                  </DropdownMenu.Item>
+                                </Show>
                                 <Show when={shareEnabled()}>
                                   <DropdownMenu.Item
                                     onSelect={() => {

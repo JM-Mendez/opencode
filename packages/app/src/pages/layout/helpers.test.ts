@@ -122,25 +122,30 @@ describe("layout workspace helpers", () => {
     expect(result).toEqual(["/root", "/c", "/b"])
   })
 
-  test("splits favorites into a mobile-only workspace section", () => {
+  test("splits favorite sessions into a mobile-only section", () => {
     expect(
       mobileWorkspaceSections({
         mobile: true,
-        workspaces: ["/repo", "/repo/.worktrees/api", "/repo/.worktrees/ui"],
-        favorites: ["/repo/.worktrees/ui"],
+        workspaces: ["/repo", "/repo/.worktrees/api"],
+        sessions: [
+          session({ id: "root", directory: "/repo" }),
+          session({ id: "api", directory: "/repo/.worktrees/api" }),
+        ],
+        favorites: ["api"],
       }),
     ).toEqual([
-      { id: "favorites", workspaces: ["/repo/.worktrees/ui"] },
+      { id: "favorites", sessions: [session({ id: "api", directory: "/repo/.worktrees/api" })] },
       { id: "workspaces", workspaces: ["/repo", "/repo/.worktrees/api"] },
     ])
 
     expect(
       mobileWorkspaceSections({
         mobile: false,
-        workspaces: ["/repo", "/repo/.worktrees/api", "/repo/.worktrees/ui"],
-        favorites: ["/repo/.worktrees/ui"],
+        workspaces: ["/repo", "/repo/.worktrees/api"],
+        sessions: [session({ id: "api", directory: "/repo/.worktrees/api" })],
+        favorites: ["api"],
       }),
-    ).toEqual([{ id: "workspaces", workspaces: ["/repo", "/repo/.worktrees/api", "/repo/.worktrees/ui"] }])
+    ).toEqual([{ id: "workspaces", workspaces: ["/repo", "/repo/.worktrees/api"] }])
   })
 
   test("finds the latest root session across workspaces", () => {

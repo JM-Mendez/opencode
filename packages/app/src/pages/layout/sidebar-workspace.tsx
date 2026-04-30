@@ -34,6 +34,7 @@ type InlineEditorComponent = (props: {
 export type WorkspaceSidebarContext = {
   currentDir: Accessor<string>
   navList: Accessor<Session[]>
+  favoriteSessions: Accessor<string[]>
   sidebarExpanded: Accessor<boolean>
   sidebarHovering: Accessor<boolean>
   clearHoverProjectSoon: () => void
@@ -49,9 +50,6 @@ export type WorkspaceSidebarContext = {
   isBusy: (directory: string) => boolean
   workspaceExpanded: (directory: string, local: boolean) => boolean
   setWorkspaceExpanded: (directory: string, value: boolean) => void
-  workspaceFavorite: (directory: string) => boolean
-  favoriteWorkspace: (directory: string) => void
-  unfavoriteWorkspace: (directory: string) => void
   showResetWorkspaceDialog: (root: string, directory: string) => void
   showDeleteWorkspaceDialog: (root: string, directory: string) => void
   setScrollContainerRef: (el: HTMLDivElement | undefined, mobile?: boolean) => void
@@ -147,12 +145,8 @@ const WorkspaceActions = (props: {
   busy: Accessor<boolean>
   menuOpen: Accessor<boolean>
   pendingRename: Accessor<boolean>
-  favorite: Accessor<boolean>
-  mobile?: boolean
   setMenuOpen: (open: boolean) => void
   setPendingRename: (value: boolean) => void
-  favoriteWorkspace: () => void
-  unfavoriteWorkspace: () => void
   sidebarHovering: Accessor<boolean>
   touch: Accessor<boolean>
   language: ReturnType<typeof useLanguage>
@@ -198,15 +192,6 @@ const WorkspaceActions = (props: {
             props.openEditor(`workspace:${props.directory}`, props.workspaceValue())
           }}
         >
-          <Show when={props.mobile}>
-            <DropdownMenu.Item
-              onSelect={() => (props.favorite() ? props.unfavoriteWorkspace() : props.favoriteWorkspace())}
-            >
-              <DropdownMenu.ItemLabel>
-                {props.favorite() ? props.language.t("sidebar.unfavorite") : props.language.t("sidebar.favorite")}
-              </DropdownMenu.ItemLabel>
-            </DropdownMenu.Item>
-          </Show>
           <DropdownMenu.Item
             disabled={props.local()}
             onSelect={() => {
@@ -341,9 +326,9 @@ export const SortableWorkspace = (props: {
   const hasMore = createMemo(() => workspaceStore.sessionTotal > count())
   const query = useQuery(() => ({ ...loadSessionsQuery(props.project.worktree) }))
   const busy = createMemo(() => props.ctx.isBusy(props.directory))
-  const loading = () => query.isLoading && count() === 0
   const dirty = createDirectoryDirty(() => props.directory, () => true)
   const isDirty = createMemo(() => !!dirty.data)
+  const loading = () => query.isLoading && count() === 0
   const touch = createMediaQuery("(hover: none)")
   const showNew = createMemo(() => !loading() && (touch() || count() === 0 || (active() && !params.id)))
   const loadMore = async () => {
@@ -356,8 +341,8 @@ export const SortableWorkspace = (props: {
     <WorkspaceHeader
       local={local}
       busy={busy}
-      open={open}
       dirty={isDirty}
+      open={open}
       directory={props.directory}
       language={language}
       branch={() => workspaceStore.vcs?.branch}
@@ -426,12 +411,8 @@ export const SortableWorkspace = (props: {
                 busy={busy}
                 menuOpen={() => menu.open}
                 pendingRename={() => menu.pendingRename}
-                favorite={() => props.ctx.workspaceFavorite(props.directory)}
-                mobile={props.mobile}
                 setMenuOpen={(open) => setMenu("open", open)}
                 setPendingRename={(value) => setMenu("pendingRename", value)}
-                favoriteWorkspace={() => props.ctx.favoriteWorkspace(props.directory)}
-                unfavoriteWorkspace={() => props.ctx.unfavoriteWorkspace(props.directory)}
                 sidebarHovering={props.ctx.sidebarHovering}
                 touch={touch}
                 language={language}
@@ -479,6 +460,10 @@ export const LocalWorkspace = (props: {
   })
   const slug = createMemo(() => base64Encode(props.project.worktree))
   const sessions = createMemo(() => sortedRootSessions(workspace().store, props.sortNow()))
+  const favorites = createMemo(() => {
+    const ids = new Set(props.ctx.favoriteSessions())
+    return sessions().filter((session) => ids.has(session.id))
+  })
   const count = createMemo(() => sessions()?.length ?? 0)
   const query = useQuery(() => ({ ...loadSessionsQuery(props.project.worktree) }))
   const hasMore = createMemo(() => workspace().store.sessionTotal > count())
@@ -493,6 +478,27 @@ export const LocalWorkspace = (props: {
       ref={(el) => props.ctx.setScrollContainerRef(el, props.mobile)}
       class="size-full flex flex-col py-2 overflow-y-auto no-scrollbar [overflow-anchor:none]"
     >
+      <Show when={props.mobile && favorites().length > 0}>
+        <div class="flex flex-col gap-1 pb-4">
+          <div class="px-3 pb-1 text-12-medium text-text-weak">{language.t("sidebar.favorites")}</div>
+          <For each={favorites()}>
+            {(session) => (
+              <SessionItem
+                session={session}
+                list={sessions()}
+                navList={props.ctx.navList}
+                slug={base64Encode(session.directory)}
+                mobile={props.mobile}
+                showChild
+                sidebarExpanded={props.ctx.sidebarExpanded}
+                clearHoverProjectSoon={props.ctx.clearHoverProjectSoon}
+                prefetchSession={props.ctx.prefetchSession}
+                archiveSession={props.ctx.archiveSession}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
       <WorkspaceSessionList
         slug={slug}
         mobile={props.mobile}

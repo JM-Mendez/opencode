@@ -88,6 +88,7 @@ import {
   type WorkspaceSidebarContext,
 } from "./layout/sidebar-workspace"
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
+import { SessionItem } from "./layout/sidebar-items"
 import { SidebarContent } from "./layout/sidebar-shell"
 
 export default function Layout(props: ParentProps) {
@@ -2025,6 +2026,7 @@ export default function Layout(props: ParentProps) {
   const workspaceSidebarCtx: WorkspaceSidebarContext = {
     currentDir,
     navList: currentSessions,
+    favoriteSessions: layout.sidebar.favoriteSessions,
     sidebarExpanded,
     sidebarHovering,
     clearHoverProjectSoon,
@@ -2040,9 +2042,6 @@ export default function Layout(props: ParentProps) {
     isBusy,
     workspaceExpanded: (directory, local) => store.workspaceExpanded[directory] ?? local,
     setWorkspaceExpanded: (directory, value) => setStore("workspaceExpanded", directory, value),
-    workspaceFavorite: (directory) => layout.sidebar.workspaceFavorite(directory)(),
-    favoriteWorkspace: layout.sidebar.favoriteWorkspace,
-    unfavoriteWorkspace: layout.sidebar.unfavoriteWorkspace,
     showResetWorkspaceDialog: (root, directory) =>
       dialog.show(() => <DialogResetWorkspace root={root} directory={directory} />),
     showDeleteWorkspaceDialog: (root, directory) =>
@@ -2108,6 +2107,12 @@ export default function Layout(props: ParentProps) {
       if (!item) return [] as string[]
       return workspaceIds(item)
     })
+    const sidebarSessions = createMemo(() =>
+      workspaces().flatMap((directory) => {
+        const [data] = globalSync.child(directory, { bootstrap: false })
+        return sortedRootSessions(data, sortNow())
+      }),
+    )
     const unseenCount = createMemo(() =>
       workspaces().reduce((total, directory) => total + notification.project.unseenCount(directory), 0),
     )
@@ -2332,7 +2337,8 @@ export default function Layout(props: ParentProps) {
                               each={mobileWorkspaceSections({
                                 mobile: panelProps.mobile,
                                 workspaces: workspaces(),
-                                favorites: layout.sidebar.favoriteWorkspaces(),
+                                sessions: sidebarSessions(),
+                                favorites: layout.sidebar.favoriteSessions(),
                               })}
                             >
                               {(section) => (
@@ -2342,17 +2348,39 @@ export default function Layout(props: ParentProps) {
                                       {language.t("sidebar.favorites")}
                                     </div>
                                   </Show>
-                                  <For each={section.workspaces}>
-                                    {(directory) => (
-                                      <SortableWorkspace
-                                        ctx={workspaceSidebarCtx}
-                                        directory={directory}
-                                        project={project()}
-                                        sortNow={sortNow}
-                                        mobile={panelProps.mobile}
-                                      />
+                                  <Show when={section.id === "favorites" && "sessions" in section}>
+                                    <For each={section.sessions}>
+                                      {(session) => (
+                                        <SessionItem
+                                          session={session}
+                                          list={sidebarSessions()}
+                                          navList={currentSessions}
+                                          slug={base64Encode(session.directory)}
+                                          mobile={panelProps.mobile}
+                                          showChild
+                                          sidebarExpanded={sidebarExpanded}
+                                          clearHoverProjectSoon={clearHoverProjectSoon}
+                                          prefetchSession={prefetchSession}
+                                          archiveSession={archiveSession}
+                                        />
+                                      )}
+                                    </For>
+                                  </Show>
+                                  <Show when={"workspaces" in section && section.workspaces}>
+                                    {(items) => (
+                                      <For each={items()}>
+                                        {(directory) => (
+                                          <SortableWorkspace
+                                            ctx={workspaceSidebarCtx}
+                                            directory={directory}
+                                            project={project()}
+                                            sortNow={sortNow}
+                                            mobile={panelProps.mobile}
+                                          />
+                                        )}
+                                      </For>
                                     )}
-                                  </For>
+                                  </Show>
                                 </div>
                               )}
                             </For>
@@ -2430,7 +2458,7 @@ export default function Layout(props: ParentProps) {
       helpLabel={() => language.t("sidebar.help")}
       onOpenHelp={() => platform.openLink("https://opencode.ai/desktop-feedback")}
       renderPanel={() =>
-        mobile ? <SidebarPanel project={currentProject} mobile /> : <SidebarPanel project={currentProject} merged />
+                mobile ? <SidebarPanel project={currentProject} mobile /> : <SidebarPanel project={currentProject} merged />
       }
     />
   )
