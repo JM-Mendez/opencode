@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "@solidjs/router"
-import { createEffect, createMemo, For, Show, type Accessor, type JSX } from "solid-js"
+import { createEffect, createMemo, For, on, Show, type Accessor, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createSortable } from "@thisbeyond/solid-dnd"
 import { createMediaQuery } from "@solid-primitives/media"
@@ -53,6 +53,18 @@ export type WorkspaceSidebarContext = {
   showResetWorkspaceDialog: (root: string, directory: string) => void
   showDeleteWorkspaceDialog: (root: string, directory: string) => void
   setScrollContainerRef: (el: HTMLDivElement | undefined, mobile?: boolean) => void
+}
+
+export type BootSessionLoadSync = {
+  child: (directory: string, options: { bootstrap: true }) => unknown
+  project: {
+    loadSessions: (directory: string) => Promise<unknown> | unknown
+  }
+}
+
+export function bootSessionLoad(globalSync: BootSessionLoadSync, directory: string) {
+  globalSync.child(directory, { bootstrap: true })
+  void globalSync.project.loadSessions(directory)
 }
 
 export const WorkspaceDragOverlay = (props: {
@@ -324,7 +336,7 @@ export const SortableWorkspace = (props: {
   const boot = createMemo(() => open() || active())
   const count = createMemo(() => sessions()?.length ?? 0)
   const hasMore = createMemo(() => workspaceStore.sessionTotal > count())
-  const query = useQuery(() => ({ ...loadSessionsQuery(props.project.worktree) }))
+  const query = useQuery(() => ({ ...loadSessionsQuery(props.directory) }))
   const busy = createMemo(() => props.ctx.isBusy(props.directory))
   const dirty = createDirectoryDirty(() => props.directory, () => true)
   const isDirty = createMemo(() => !!dirty.data)
@@ -361,10 +373,10 @@ export const SortableWorkspace = (props: {
     if (props.ctx.editorOpen(`workspace:${props.directory}`)) props.ctx.closeEditor()
   }
 
-  createEffect(() => {
-    if (!boot()) return
-    globalSync.child(props.directory, { bootstrap: true })
-  })
+  createEffect(on(boot, (ready) => {
+    if (!ready) return
+    bootSessionLoad(globalSync, props.directory)
+  }))
 
   return (
     <div
