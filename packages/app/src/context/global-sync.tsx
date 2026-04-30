@@ -154,14 +154,14 @@ function createGlobalSync() {
     return sdk
   }
 
-  async function loadSessions(directory: string) {
+  async function loadSessions(directory: string, options?: { force?: boolean }) {
     const pending = sessionLoads.get(directory)
     if (pending) return pending
 
     children.pin(directory)
     const [store, setStore] = children.child(directory, { bootstrap: false })
     const meta = sessionMeta.get(directory)
-    if (meta && meta.limit >= store.limit) {
+    if (!options?.force && meta && meta.limit >= store.limit) {
       const next = trimSessions(store.session, {
         limit: store.limit,
         permission: store.permission,

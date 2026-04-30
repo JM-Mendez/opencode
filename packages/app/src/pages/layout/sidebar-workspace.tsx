@@ -58,13 +58,23 @@ export type WorkspaceSidebarContext = {
 export type BootSessionLoadSync = {
   child: (directory: string, options: { bootstrap: true }) => unknown
   project: {
-    loadSessions: (directory: string) => Promise<unknown> | unknown
+    loadSessions: (directory: string, options: { force: true }) => Promise<unknown> | unknown
   }
 }
 
 export function bootSessionLoad(globalSync: BootSessionLoadSync, directory: string) {
   globalSync.child(directory, { bootstrap: true })
-  void globalSync.project.loadSessions(directory)
+  void globalSync.project.loadSessions(directory, { force: true })
+}
+
+export function createBootSessionLoadGate(globalSync: BootSessionLoadSync, directory: string, retryMs = 30_000) {
+  let lastLoad = Number.NEGATIVE_INFINITY
+  return (ready: boolean) => {
+    if (!ready) return
+    if (Date.now() - lastLoad < retryMs) return
+    lastLoad = Date.now()
+    bootSessionLoad(globalSync, directory)
+  }
 }
 
 export const WorkspaceDragOverlay = (props: {
@@ -347,6 +357,7 @@ export const SortableWorkspace = (props: {
     setWorkspaceStore("limit", (limit) => (limit ?? 0) + 5)
     await globalSync.project.loadSessions(props.directory)
   }
+  const loadBootSessions = createBootSessionLoadGate(globalSync, props.directory)
 
   const workspaceEditActive = createMemo(() => props.ctx.editorOpen(`workspace:${props.directory}`))
   const header = () => (
@@ -374,8 +385,7 @@ export const SortableWorkspace = (props: {
   }
 
   createEffect(on(boot, (ready) => {
-    if (!ready) return
-    bootSessionLoad(globalSync, props.directory)
+    loadBootSessions(ready)
   }))
 
   return (
@@ -484,6 +494,8 @@ export const LocalWorkspace = (props: {
     workspace().setStore("limit", (limit) => (limit ?? 0) + 5)
     await globalSync.project.loadSessions(props.project.worktree)
   }
+
+  createEffect(on(() => props.project.worktree, (directory) => bootSessionLoad(globalSync, directory)))
 
   return (
     <div

@@ -1,13 +1,18 @@
 import { beforeAll, beforeEach, describe, expect, mock, test } from "bun:test"
 import { createRoot } from "solid-js"
 import { createStore } from "solid-js/store"
+import { isServer } from "solid-js/web"
 import type { LocalProject } from "@/context/layout"
 import type { State } from "@/context/global-sync/types"
 
 const sessionQueryDirectories: string[] = []
+const bootstrapChildDirectories: string[] = []
+const loadSessionCalls: Array<{ directory: string; options?: { force: true } }> = []
 
 let SortableWorkspace: typeof import("./sidebar-workspace").SortableWorkspace
+let LocalWorkspace: typeof import("./sidebar-workspace").LocalWorkspace
 let bootSessionLoad: typeof import("./sidebar-workspace").bootSessionLoad
+let createBootSessionLoadGate: typeof import("./sidebar-workspace").createBootSessionLoadGate
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, "React", {
@@ -33,7 +38,8 @@ beforeAll(async () => {
   mock.module("@/context/global-sync", () => ({
     loadSessionsQuery: (directory: string) => ({ queryKey: [directory, "loadSessions"] }),
     useGlobalSync: () => ({
-      child: (directory: string) => {
+      child: (directory: string, options?: { bootstrap: true }) => {
+        if (options?.bootstrap) bootstrapChildDirectories.push(directory)
         return createStore({
           project: "",
           projectMeta: undefined,
@@ -63,7 +69,10 @@ beforeAll(async () => {
         } satisfies State)
       },
       project: {
-        loadSessions: () => Promise.resolve(),
+        loadSessions: (directory: string, options?: { force: true }) => {
+          loadSessionCalls.push({ directory, options })
+          return Promise.resolve()
+        },
       },
     }),
   }))
@@ -115,17 +124,45 @@ beforeAll(async () => {
 
   const mod = await import("./sidebar-workspace")
   SortableWorkspace = mod.SortableWorkspace
+  LocalWorkspace = mod.LocalWorkspace
   bootSessionLoad = mod.bootSessionLoad
+  createBootSessionLoadGate = mod.createBootSessionLoadGate
 })
 
 beforeEach(() => {
   sessionQueryDirectories.length = 0
+  bootstrapChildDirectories.length = 0
+  loadSessionCalls.length = 0
+})
+
+const workspaceCtx = () => ({
+  currentDir: () => "/repo",
+  navList: () => [],
+  favoriteSessions: () => [],
+  sidebarExpanded: () => true,
+  sidebarHovering: () => false,
+  clearHoverProjectSoon: () => undefined,
+  prefetchSession: () => undefined,
+  archiveSession: () => Promise.resolve(),
+  workspaceName: () => undefined,
+  renameWorkspace: () => undefined,
+  editorOpen: () => false,
+  openEditor: () => undefined,
+  closeEditor: () => undefined,
+  setEditor: () => undefined,
+  InlineEditor: () => null,
+  isBusy: () => false,
+  workspaceExpanded: () => true,
+  setWorkspaceExpanded: () => undefined,
+  showResetWorkspaceDialog: () => undefined,
+  showDeleteWorkspaceDialog: () => undefined,
+  setScrollContainerRef: () => undefined,
 })
 
 describe("SortableWorkspace session loading", () => {
   test("boots workspace sessions with bootstrap child and session load", () => {
     const calls: Array<{ directory: string; options: { bootstrap: true } }> = []
-    const loaded: string[] = []
+    const loaded: Array<{ directory: string; options: { force: true } }> = []
 
     bootSessionLoad(
       {
@@ -133,8 +170,8 @@ describe("SortableWorkspace session loading", () => {
           calls.push({ directory, options })
         },
         project: {
-          loadSessions: (directory) => {
-            loaded.push(directory)
+          loadSessions: (directory, options) => {
+            loaded.push({ directory, options })
           },
         },
       },
@@ -142,7 +179,7 @@ describe("SortableWorkspace session loading", () => {
     )
 
     expect(calls).toEqual([{ directory: "/repo/.worktrees/sandbox", options: { bootstrap: true } }])
-    expect(loaded).toEqual(["/repo/.worktrees/sandbox"])
+    expect(loaded).toEqual([{ directory: "/repo/.worktrees/sandbox", options: { force: true } }])
   })
 
   test("observes the workspace directory session query when a sandbox workspace boots", async () => {
@@ -154,29 +191,7 @@ describe("SortableWorkspace session loading", () => {
           directory: "/repo/.worktrees/sandbox",
           project,
           sortNow: () => 1,
-          ctx: {
-            currentDir: () => "/repo/.worktrees/sandbox",
-            navList: () => [],
-            favoriteSessions: () => [],
-            sidebarExpanded: () => true,
-            sidebarHovering: () => false,
-            clearHoverProjectSoon: () => undefined,
-            prefetchSession: () => undefined,
-            archiveSession: () => Promise.resolve(),
-            workspaceName: () => undefined,
-            renameWorkspace: () => undefined,
-            editorOpen: () => false,
-            openEditor: () => undefined,
-            closeEditor: () => undefined,
-            setEditor: () => undefined,
-            InlineEditor: () => null,
-            isBusy: () => false,
-            workspaceExpanded: () => true,
-            setWorkspaceExpanded: () => undefined,
-            showResetWorkspaceDialog: () => undefined,
-            showDeleteWorkspaceDialog: () => undefined,
-            setScrollContainerRef: () => undefined,
-          },
+          ctx: { ...workspaceCtx(), currentDir: () => "/repo/.worktrees/sandbox" },
         })
         queueMicrotask(() => {
           dispose()
@@ -186,5 +201,68 @@ describe("SortableWorkspace session loading", () => {
     })
 
     expect(sessionQueryDirectories).toContain("/repo/.worktrees/sandbox")
+  })
+
+  test("gates rapid sandbox session loads while allowing retry after the interval", () => {
+    const originalNow = Date.now
+    let now = 1_000
+    Date.now = () => now
+    const load = createBootSessionLoadGate(
+      {
+        child: (directory) => {
+          bootstrapChildDirectories.push(directory)
+        },
+        project: {
+          loadSessions: (directory, options) => {
+            loadSessionCalls.push({ directory, options })
+          },
+        },
+      },
+      "/repo/.worktrees/sandbox",
+    )
+
+    try {
+      load(false)
+      load(true)
+      load(false)
+      load(true)
+      now += 29_999
+      load(true)
+      now += 1
+      load(true)
+
+      expect(bootstrapChildDirectories).toEqual(["/repo/.worktrees/sandbox", "/repo/.worktrees/sandbox"])
+      expect(loadSessionCalls).toEqual([
+        { directory: "/repo/.worktrees/sandbox", options: { force: true } },
+        { directory: "/repo/.worktrees/sandbox", options: { force: true } },
+      ])
+    } finally {
+      Date.now = originalNow
+    }
+  })
+
+  test("LocalWorkspace observes the selected local project session query", async () => {
+    const project = { id: "project", worktree: "/repo", expanded: true } satisfies LocalProject
+
+    await new Promise<void>((resolve) => {
+      createRoot((dispose) => {
+        LocalWorkspace({
+          project,
+          sortNow: () => 1,
+          mobile: true,
+          ctx: workspaceCtx(),
+        })
+        queueMicrotask(() => {
+          dispose()
+          resolve()
+        })
+      })
+    })
+
+    expect(sessionQueryDirectories).toContain("/repo")
+    if (!isServer) {
+      expect(bootstrapChildDirectories).toEqual(["/repo"])
+      expect(loadSessionCalls).toEqual([{ directory: "/repo", options: { force: true } }])
+    }
   })
 })
