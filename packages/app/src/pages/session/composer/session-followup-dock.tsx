@@ -1,4 +1,4 @@
-import { For, Show, createMemo } from "solid-js"
+import { For, Show, createEffect, createMemo, on } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Button } from "@opencode-ai/ui/button"
 import { DockTray } from "@opencode-ai/ui/dock-surface"
@@ -13,8 +13,10 @@ export function SessionFollowupDock(props: {
 }) {
   const language = useLanguage()
   const [store, setStore] = createStore({
-    collapsed: false,
+    collapsed: true,
   })
+
+  createEffect(on(() => `${props.items.length}:${props.items[0]?.id ?? ""}`, () => setStore("collapsed", true)))
 
   const toggle = () => setStore("collapsed", (value) => !value)
   const total = createMemo(() => props.items.length)
@@ -26,14 +28,7 @@ export function SessionFollowupDock(props: {
   const preview = createMemo(() => props.items[0]?.text ?? "")
 
   return (
-    <DockTray
-      data-component="session-followup-dock"
-      style={{
-        "margin-bottom": "-0.875rem",
-        "border-bottom-left-radius": 0,
-        "border-bottom-right-radius": 0,
-      }}
-    >
+    <DockTray data-component="session-followup-dock">
       <div
         class="pl-3 pr-2 py-2 flex items-center gap-2"
         role="button"
@@ -45,9 +40,9 @@ export function SessionFollowupDock(props: {
           toggle()
         }}
       >
-        <span class="shrink-0 text-13-medium text-text-strong cursor-default">{label()}</span>
+        <span class="shrink-0 text-14-regular text-text-strong cursor-default">{label()}</span>
         <Show when={store.collapsed && preview()}>
-          <span class="min-w-0 flex-1 truncate text-13-regular text-text-base cursor-default">{preview()}</span>
+          <span class="min-w-0 flex-1 truncate text-14-regular text-text-base cursor-default">{preview()}</span>
         </Show>
         <div class="ml-auto shrink-0">
           <IconButton
