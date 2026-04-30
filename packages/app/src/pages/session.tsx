@@ -56,6 +56,7 @@ import { MessageTimeline } from "@/pages/session/message-timeline"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { syncSessionModel } from "@/pages/session/session-model-helpers"
+import { isFollowupQueueActive, isFollowupQueueEnabled, shouldDrainQueuedFollowup } from "@/pages/session/session-followup-queue"
 import { SessionFileTree, SessionSidePanel } from "@/pages/session/session-side-panel"
 import { TerminalPanel } from "@/pages/session/terminal-panel"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
@@ -1622,10 +1623,10 @@ export default function Page() {
     })
 
   const busy = (sessionID: string) => {
-    if ((sync.data.session_status[sessionID] ?? { type: "idle" as const }).type !== "idle") return true
-    return (sync.data.message[sessionID] ?? []).some(
-      (item) => item.role === "assistant" && typeof item.time.completed !== "number",
-    )
+    return isFollowupQueueActive({
+      sessionStatus: sync.data.session_status[sessionID],
+      messages: sync.data.message[sessionID] ?? [],
+    })
   }
 
   const queuedFollowups = createMemo(() => {
@@ -1678,8 +1679,14 @@ export default function Page() {
 
   const queueEnabled = createMemo(() => {
     const id = params.id
-    if (!id) return false
-    return settings.general.followup() === "queue" && busy(id) && !composer.blocked() && !isChildSession()
+    return isFollowupQueueEnabled({
+      followupMode: settings.general.followup(),
+      sessionID: id,
+      sessionStatus: id ? sync.data.session_status[id] : undefined,
+      messages: id ? (sync.data.message[id] ?? []) : [],
+      blocked: composer.blocked(),
+      childSession: isChildSession(),
+    })
   })
 
   const followupText = (item: FollowupDraft) => {
@@ -1838,13 +1845,22 @@ export default function Page() {
     if (!sessionID) return
 
     const item = queuedFollowups()[0]
+    if (
+      !shouldDrainQueuedFollowup({
+        sessionID,
+        currentSessionID: params.id,
+        sessionStatus: sync.data.session_status[sessionID],
+        messages: sync.data.message[sessionID] ?? [],
+        queuedCount: queuedFollowups().length,
+        followupPending: followupBusy(sessionID),
+        blocked: composer.blocked(),
+        childSession: isChildSession(),
+        failedFollowupID: item && followup.failed[sessionID] === item.id ? item.id : undefined,
+        paused: !!followup.paused[sessionID],
+      })
+    )
+      return
     if (!item) return
-    if (followupBusy(sessionID)) return
-    if (followup.failed[sessionID] === item.id) return
-    if (followup.paused[sessionID]) return
-    if (isChildSession()) return
-    if (composer.blocked()) return
-    if (busy(sessionID)) return
 
     void sendFollowup(sessionID, item.id)
   })
