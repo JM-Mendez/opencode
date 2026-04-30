@@ -16,7 +16,7 @@ import { type Session } from "@opencode-ai/sdk/v2/client"
 import { type LocalProject } from "@/context/layout"
 import { loadSessionsQuery, useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
-import { NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
+import { createDirectoryDirty, NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
 import { sortedRootSessions, workspaceKey } from "./helpers"
 import { useQuery } from "@tanstack/solid-query"
 
@@ -87,6 +87,7 @@ export const WorkspaceDragOverlay = (props: {
 const WorkspaceHeader = (props: {
   local: Accessor<boolean>
   busy: Accessor<boolean>
+  dirty: Accessor<boolean>
   open: Accessor<boolean>
   directory: string
   language: ReturnType<typeof useLanguage>
@@ -100,7 +101,10 @@ const WorkspaceHeader = (props: {
 }): JSX.Element => (
   <div class="flex items-center gap-1 min-w-0 flex-1">
     <div class="flex items-center justify-center shrink-0 size-6">
-      <Show when={props.busy()} fallback={<Icon name="branch" size="small" />}>
+      <Show
+        when={props.busy()}
+        fallback={<Icon name="branch" size="small" class={props.dirty() ? "text-icon-warning-hover" : ""} />}
+      >
         <Spinner class="size-[15px]" />
       </Show>
     </div>
@@ -338,6 +342,8 @@ export const SortableWorkspace = (props: {
   const query = useQuery(() => ({ ...loadSessionsQuery(props.project.worktree) }))
   const busy = createMemo(() => props.ctx.isBusy(props.directory))
   const loading = () => query.isLoading && count() === 0
+  const dirty = createDirectoryDirty(() => props.directory, () => true)
+  const isDirty = createMemo(() => !!dirty.data)
   const touch = createMediaQuery("(hover: none)")
   const showNew = createMemo(() => !loading() && (touch() || count() === 0 || (active() && !params.id)))
   const loadMore = async () => {
@@ -351,6 +357,7 @@ export const SortableWorkspace = (props: {
       local={local}
       busy={busy}
       open={open}
+      dirty={isDirty}
       directory={props.directory}
       language={language}
       branch={() => workspaceStore.vcs?.branch}

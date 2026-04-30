@@ -6,7 +6,9 @@ import { Spinner } from "@opencode-ai/ui/spinner"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { A, useParams } from "@solidjs/router"
-import { type Accessor, createMemo, For, type JSX, Match, Show, Switch } from "solid-js"
+import { createQueries, createQuery, useQueryClient } from "@tanstack/solid-query"
+import { type Accessor, createMemo, For, type JSX, Match, onCleanup, Show, Switch } from "solid-js"
+import { useGlobalSDK } from "@/context/global-sdk"
 import { useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { getAvatarColors, type LocalProject, useLayout } from "@/context/layout"
@@ -25,11 +27,85 @@ export function getProjectAvatarSource(id?: string, icon?: { color?: string; url
     : (icon?.override ?? (icon?.color ? undefined : icon?.url))
 }
 
+const directoryFileStatusKey = (directory: string) => ["directory-file-status", directory] as const
+
+export const createDirectoryDirty = (directory: Accessor<string>, enabled: Accessor<boolean>) => {
+  const globalSDK = useGlobalSDK()
+  const queryClient = useQueryClient()
+  const query = createQuery(() => ({
+    queryKey: directoryFileStatusKey(directory()),
+    enabled: enabled(),
+    staleTime: Number.POSITIVE_INFINITY,
+    queryFn: () =>
+      globalSDK.client.file
+        .status({ directory: directory() })
+        .then((result) => (result.data ?? []).length > 0)
+        .catch(() => false),
+  }))
+
+  const stopDirtyWatcher = globalSDK.event.listen((evt) => {
+    if (evt.details.type !== "file.watcher.updated") return
+    if (evt.name !== directory()) return
+    const properties =
+      typeof evt.details.properties === "object" && evt.details.properties
+        ? (evt.details.properties as Record<string, unknown>)
+        : undefined
+    const file = typeof properties?.file === "string" ? properties.file : undefined
+    if (!file) return
+    if (file.startsWith(".git/") && file !== ".git/index" && file !== ".git/HEAD") return
+    void queryClient.invalidateQueries({ queryKey: directoryFileStatusKey(directory()) })
+  })
+  onCleanup(stopDirtyWatcher)
+
+  return query
+}
+
+const createDirectoriesDirty = (directories: Accessor<string[]>, enabled: Accessor<boolean>) => {
+  const globalSDK = useGlobalSDK()
+  const queryClient = useQueryClient()
+  const queries = createQueries(() => ({
+    queries: directories().map((directory) => ({
+      queryKey: directoryFileStatusKey(directory),
+      enabled: enabled(),
+      staleTime: Number.POSITIVE_INFINITY,
+      queryFn: () =>
+        globalSDK.client.file
+          .status({ directory })
+          .then((result) => (result.data ?? []).length > 0)
+          .catch(() => false),
+    })),
+  }))
+
+  const stopDirtyWatcher = globalSDK.event.listen((evt) => {
+    if (evt.details.type !== "file.watcher.updated") return
+    if (!directories().includes(evt.name)) return
+    const properties =
+      typeof evt.details.properties === "object" && evt.details.properties
+        ? (evt.details.properties as Record<string, unknown>)
+        : undefined
+    const file = typeof properties?.file === "string" ? properties.file : undefined
+    if (!file) return
+    if (file.startsWith(".git/") && file !== ".git/index" && file !== ".git/HEAD") return
+    void queryClient.invalidateQueries({ queryKey: directoryFileStatusKey(evt.name) })
+  })
+  onCleanup(stopDirtyWatcher)
+
+  return queries
+}
+
+const DirtyDot = (props: { class?: string }): JSX.Element => (
+  <span class={`block size-1.5 ${props.class ?? ""}`}>
+    <span class="block size-full rounded-full bg-icon-warning-hover" />
+  </span>
+)
+
 export const ProjectIcon = (props: { project: LocalProject; class?: string; notify?: boolean }): JSX.Element => {
   const globalSync = useGlobalSync()
   const notification = useNotification()
   const permission = usePermission()
   const dirs = createMemo(() => [props.project.worktree, ...(props.project.sandboxes ?? [])])
+  const dirtyQueries = createDirectoriesDirty(dirs, () => props.notify === true)
+  const dirty = createMemo(() => dirtyQueries.some((query) => !!query.data))
   const unseenCount = createMemo(() =>
     dirs().reduce((total, directory) => total + notification.project.unseenCount(directory), 0),
   )
@@ -40,7 +116,16 @@ export const ProjectIcon = (props: { project: LocalProject; class?: string; noti
       return hasProjectPermissions(store.permission, (item) => !permission.autoResponds(item, directory))
     }),
   )
-  const notify = createMemo(() => props.notify && (hasPermissions() || unseenCount() > 0))
+  const isRunning = createMemo(() =>
+    dirs().some((directory) => {
+      const [store] = globalSync.child(directory, { bootstrap: false })
+      return Object.values(store.session_status).some(
+        (status) => status.type === "busy" || status.type === "retry" || status.type !== "idle",
+      )
+    }),
+  )
+  const notify = createMemo(() => props.notify && (hasPermissions() || hasError() || unseenCount() > 0 || dirty() || isRunning()))
+  const onlyDirty = createMemo(() => dirty() && !hasPermissions() && !hasError() && unseenCount() === 0 && !isRunning())
   const name = createMemo(() => props.project.name || getFilename(props.project.worktree))
 
   return (
@@ -55,14 +140,21 @@ export const ProjectIcon = (props: { project: LocalProject; class?: string; noti
         />
       </div>
       <Show when={notify()}>
-        <div
-          classList={{
-            "absolute top-px right-px size-1.5 rounded-full z-10": true,
-            "bg-surface-warning-strong": hasPermissions(),
-            "bg-icon-critical-base": !hasPermissions() && hasError(),
-            "bg-text-interactive-base": !hasPermissions() && !hasError(),
-          }}
-        />
+        <Show
+          when={onlyDirty()}
+          fallback={
+            <div
+              classList={{
+                "absolute top-px right-px size-1.5 rounded-full z-10": true,
+                "bg-surface-warning-strong": hasPermissions(),
+                "bg-icon-critical-base": !hasPermissions() && hasError(),
+                "bg-text-interactive-base": !hasPermissions() && !hasError(),
+              }}
+            />
+          }
+        >
+          <DirtyDot class="absolute top-px right-px z-10" />
+        </Show>
       </Show>
     </div>
   )
