@@ -1,5 +1,5 @@
 import { createStore, reconcile } from "solid-js/store"
-import { createEffect, createMemo } from "solid-js"
+import { createEffect } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { persisted } from "@/utils/persist"
 
@@ -147,7 +147,7 @@ const defaultSettings: Settings = {
 }
 
 function withFallback<T>(read: () => T | undefined, fallback: T) {
-  return createMemo(() => read() ?? fallback)
+  return () => read() ?? fallback
 }
 
 export const { use: useSettings, provider: SettingsProvider } = createSimpleContext({

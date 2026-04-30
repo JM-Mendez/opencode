@@ -1,7 +1,7 @@
 import { Platform, usePlatform } from "@/context/platform"
 import { makePersisted, type AsyncStorage, type SyncStorage } from "@solid-primitives/storage"
 import { checksum } from "@opencode-ai/core/util/encode"
-import { createResource, type Accessor } from "solid-js"
+import { createSignal, type Accessor } from "solid-js"
 import type { SetStoreFunction, Store } from "solid-js/store"
 
 type InitType = Promise<string> | string | null
@@ -9,7 +9,7 @@ type PersistedWithReady<T> = [
   Store<T>,
   SetStoreFunction<T>,
   InitType,
-  Accessor<boolean> & { promise: undefined | Promise<any> },
+  Accessor<boolean> & { promise: undefined | Promise<string> },
 ]
 
 type PersistTarget = {
@@ -455,21 +455,14 @@ export function persisted<T>(
 
   const [state, setState, init] = makePersisted(store, { name: config.key, storage })
 
-  const isAsync = init instanceof Promise
-  const [ready] = createResource(
-    () => init,
-    async (initValue) => {
-      if (initValue instanceof Promise) await initValue
-      return true
-    },
-    { initialValue: !isAsync },
-  )
+  const [ready, setReady] = createSignal(!(init instanceof Promise))
+  if (init instanceof Promise) init.then(() => setReady(true), () => setReady(true))
 
   return [
     state,
     setState,
     init,
-    Object.assign(() => (ready.loading ? false : ready.latest === true), {
+    Object.assign(ready, {
       promise: init instanceof Promise ? init : undefined,
     }),
   ]
