@@ -378,6 +378,7 @@ export const dict = {
   "context.rawMessages.title": "Raw messages",
 
   "context.stats.session": "Session",
+  "context.stats.sessionID": "Session ID",
   "context.stats.messages": "Messages",
   "context.stats.provider": "Provider",
   "context.stats.model": "Model",

@@ -906,6 +906,20 @@ export function MessageTimeline(props: {
                                 >
                                   <DropdownMenu.ItemLabel>{language.t("common.rename")}</DropdownMenu.ItemLabel>
                                 </DropdownMenu.Item>
+                                <Show when={shareEnabled()}>
+                                  <DropdownMenu.Item
+                                    onSelect={() => {
+                                      setTitle({ pendingShare: true, menuOpen: false })
+                                    }}
+                                  >
+                                    <DropdownMenu.ItemLabel>
+                                      {language.t("session.share.action.share")}
+                                    </DropdownMenu.ItemLabel>
+                                  </DropdownMenu.Item>
+                                </Show>
+                                <DropdownMenu.Item onSelect={() => void archiveSession(id)}>
+                                  <DropdownMenu.ItemLabel>{language.t("common.archive")}</DropdownMenu.ItemLabel>
+                                </DropdownMenu.Item>
                                 <Show when={!isDesktop()}>
                                   <DropdownMenu.Item
                                     onSelect={() =>
@@ -921,20 +935,6 @@ export function MessageTimeline(props: {
                                     </DropdownMenu.ItemLabel>
                                   </DropdownMenu.Item>
                                 </Show>
-                                <Show when={shareEnabled()}>
-                                  <DropdownMenu.Item
-                                    onSelect={() => {
-                                      setTitle({ pendingShare: true, menuOpen: false })
-                                    }}
-                                  >
-                                    <DropdownMenu.ItemLabel>
-                                      {language.t("session.share.action.share")}
-                                    </DropdownMenu.ItemLabel>
-                                  </DropdownMenu.Item>
-                                </Show>
-                                <DropdownMenu.Item onSelect={() => void archiveSession(id)}>
-                                  <DropdownMenu.ItemLabel>{language.t("common.archive")}</DropdownMenu.ItemLabel>
-                                </DropdownMenu.Item>
                                 <DropdownMenu.Separator />
                                 <DropdownMenu.Item
                                   onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id} />)}

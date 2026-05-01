@@ -360,6 +360,7 @@ export const dict = {
   "context.rawMessages.title": "Rå beskeder",
 
   "context.stats.session": "Session",
+  "context.stats.sessionID": "Sessions-id",
   "context.stats.messages": "Beskeder",
   "context.stats.provider": "Udbyder",
   "context.stats.model": "Model",
