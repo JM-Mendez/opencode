@@ -5,7 +5,7 @@ const drainInput = () => ({
   sessionID: "session-1",
   currentSessionID: "session-1",
   sessionStatus: { type: "idle" as const },
-  messages: [{ id: "message-1", role: "assistant" as const, time: { created: 1, completed: 2 } }],
+  messages: [{ id: "message-1", role: "assistant" as const, time: { created: 1, completed: 2 }, finish: "stop" as const }],
   queuedCount: 1,
   followupPending: false,
   blocked: false,
@@ -18,10 +18,18 @@ describe("hasActiveAssistantTurn", () => {
   test("uses the latest assistant message as the visible assistant turn", () => {
     expect(
       hasActiveAssistantTurn([
-        { id: "older", role: "assistant", time: { created: 1 } },
-        { id: "newer", role: "assistant", time: { created: 2, completed: 3 } },
+        { id: "older", role: "assistant", time: { created: 1 }, finish: "stop" },
+        { id: "newer", role: "assistant", time: { created: 2, completed: 3 }, finish: "stop" },
       ]),
     ).toBe(false)
+  })
+
+  test("treats the latest completed assistant tool-calls turn as active", () => {
+    expect(
+      hasActiveAssistantTurn([
+        { id: "message-1", role: "assistant", time: { created: 1, completed: 2 }, finish: "tool-calls" },
+      ]),
+    ).toBe(true)
   })
 })
 
@@ -87,6 +95,17 @@ describe("isFollowupQueueEnabled", () => {
         followupMode: "queue",
         sessionID: "session-1",
         sessionStatus: { type: "idle" },
+        messages: [{ id: "message-1", role: "assistant", time: { created: 1, completed: 2 }, finish: "tool-calls" }],
+        blocked: false,
+        childSession: false,
+      }),
+    ).toBe(true)
+
+    expect(
+      isFollowupQueueEnabled({
+        followupMode: "queue",
+        sessionID: "session-1",
+        sessionStatus: { type: "idle" },
         messages: [],
         blocked: false,
         childSession: false,
@@ -102,7 +121,7 @@ describe("shouldDrainQueuedFollowup", () => {
         sessionID: "session-1",
         currentSessionID: "session-1",
         sessionStatus: { type: "idle" },
-        messages: [{ id: "message-1", role: "assistant", time: { created: 1 } }],
+        messages: [{ id: "message-1", role: "assistant", time: { created: 1 }, finish: "stop" }],
         queuedCount: 1,
         followupPending: false,
         blocked: false,
@@ -117,13 +136,41 @@ describe("shouldDrainQueuedFollowup", () => {
         sessionID: "session-1",
         currentSessionID: "session-1",
         sessionStatus: { type: "idle" },
-        messages: [{ id: "message-1", role: "assistant", time: { created: 1, completed: 2 } }],
+        messages: [{ id: "message-1", role: "assistant", time: { created: 1, completed: 2 }, finish: "stop" }],
         queuedCount: 1,
         followupPending: false,
         blocked: false,
         childSession: false,
         failedFollowupID: undefined,
         paused: false,
+      }),
+    ).toBe(true)
+  })
+
+  test("does not drain while the latest completed assistant turn finished with tool calls", () => {
+    expect(
+      shouldDrainQueuedFollowup({
+        ...drainInput(),
+        messages: [{ id: "message-1", role: "assistant", time: { created: 1, completed: 2 }, finish: "tool-calls" }],
+      }),
+    ).toBe(false)
+  })
+
+  test("recovers after a later completed assistant turn finishes with stop", () => {
+    expect(
+      shouldDrainQueuedFollowup({
+        ...drainInput(),
+        messages: [{ id: "message-1", role: "assistant", time: { created: 1, completed: 2 }, finish: "tool-calls" }],
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldDrainQueuedFollowup({
+        ...drainInput(),
+        messages: [
+          { id: "message-1", role: "assistant", time: { created: 1, completed: 2 }, finish: "tool-calls" },
+          { id: "message-2", role: "assistant", time: { created: 3, completed: 4 }, finish: "stop" },
+        ],
       }),
     ).toBe(true)
   })

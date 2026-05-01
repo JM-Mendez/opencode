@@ -25,7 +25,7 @@ let params: { id?: string } = {}
 let selected = "/repo/worktree-a"
 let variant: string | undefined
 
-const promptValue: Prompt = [{ type: "text", content: "ls", start: 0, end: 2 }]
+let promptValue: Prompt = [{ type: "text", content: "ls", start: 0, end: 2 }]
 
 const clientFor = (directory: string) => {
   createdClients.push(directory)
@@ -164,6 +164,9 @@ beforeAll(async () => {
 
   mock.module("@/context/global-sync", () => ({
     useGlobalSync: () => ({
+      todo: {
+        set: () => undefined,
+      },
       child: (directory: string) => {
         syncedDirectories.push(directory)
         storedSessions[directory] ??= []
@@ -213,6 +216,7 @@ beforeEach(() => {
   syncedDirectories.length = 0
   selected = "/repo/worktree-a"
   variant = undefined
+  promptValue = [{ type: "text", content: "ls", start: 0, end: 2 }]
   for (const key of Object.keys(storedSessions)) delete storedSessions[key]
 })
 
@@ -341,5 +345,80 @@ describe("prompt submit worktree selection", () => {
 
     expect(storedSessions["/repo/worktree-a"]).toEqual([{ id: "session-1", title: "New session 1" }])
     expect(optimisticSeeded).toEqual([true])
+  })
+
+  test("queues DOM editor text instead of aborting when the prompt store is blank while working", async () => {
+    params = { id: "session-1" }
+    promptValue = []
+    const editor = document.createElement("div")
+    editor.textContent = "queued follow-up"
+    const queued: Prompt[] = []
+    let aborted = false
+
+    const submit = createPromptSubmit({
+      info: () => ({ id: "session-1" }),
+      imageAttachments: () => [],
+      commentCount: () => 0,
+      autoAccept: () => false,
+      mode: () => "normal",
+      working: () => true,
+      editor: () => editor,
+      queueScroll: () => undefined,
+      promptLength: (value) => value.reduce((sum, part) => sum + ("content" in part ? part.content.length : 0), 0),
+      addToHistory: () => undefined,
+      resetHistoryNavigation: () => undefined,
+      setMode: () => undefined,
+      setPopover: () => undefined,
+      shouldQueue: () => true,
+      onQueue: (draft) => queued.push(draft.prompt),
+      onAbort: () => {
+        aborted = true
+      },
+    })
+
+    await submit.handleSubmit({ preventDefault: () => undefined } as unknown as Event)
+
+    expect(aborted).toBe(false)
+    expect(queued).toEqual([[{ type: "text", content: "queued follow-up", start: 0, end: 16 }]])
+  })
+
+  test("keeps non-blank prompt store file metadata instead of replacing it with editor DOM", async () => {
+    params = { id: "session-1" }
+    promptValue = [
+      { type: "text", content: "read ", start: 0, end: 5 },
+      {
+        type: "file",
+        path: "/repo/main/src/file.ts",
+        content: "src/file.ts",
+        start: 5,
+        end: 16,
+        selection: { startLine: 3, startChar: 1, endLine: 7, endChar: 2 },
+      },
+    ]
+    const editor = document.createElement("div")
+    editor.textContent = "read src/file.ts"
+    const queued: Prompt[] = []
+
+    const submit = createPromptSubmit({
+      info: () => ({ id: "session-1" }),
+      imageAttachments: () => [],
+      commentCount: () => 0,
+      autoAccept: () => false,
+      mode: () => "normal",
+      working: () => true,
+      editor: () => editor,
+      queueScroll: () => undefined,
+      promptLength: (value) => value.reduce((sum, part) => sum + ("content" in part ? part.content.length : 0), 0),
+      addToHistory: () => undefined,
+      resetHistoryNavigation: () => undefined,
+      setMode: () => undefined,
+      setPopover: () => undefined,
+      shouldQueue: () => true,
+      onQueue: (draft) => queued.push(draft.prompt),
+    })
+
+    await submit.handleSubmit({ preventDefault: () => undefined } as unknown as Event)
+
+    expect(queued).toEqual([promptValue])
   })
 })

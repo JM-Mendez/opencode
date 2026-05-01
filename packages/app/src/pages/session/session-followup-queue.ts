@@ -1,6 +1,6 @@
 import type { Message, SessionStatus } from "@opencode-ai/sdk/v2/client"
 
-type FollowupAssistantMessage = Pick<Extract<Message, { role: "assistant" }>, "id" | "role" | "time">
+type FollowupAssistantMessage = Pick<Extract<Message, { role: "assistant" }>, "id" | "role" | "time" | "finish">
 type FollowupUserMessage = Pick<Extract<Message, { role: "user" }>, "id" | "role" | "time">
 type FollowupMessage = FollowupAssistantMessage | FollowupUserMessage
 
@@ -8,7 +8,7 @@ const idle = { type: "idle" as const }
 
 export const hasActiveAssistantTurn = (messages: FollowupMessage[]) => {
   const latestAssistant = messages.findLast((item) => item.role === "assistant")
-  return !!latestAssistant && typeof latestAssistant.time.completed !== "number"
+  return !!latestAssistant && (typeof latestAssistant.time.completed !== "number" || latestAssistant.finish === "tool-calls")
 }
 
 export const isFollowupQueueActive = (input: {

@@ -50,6 +50,63 @@ const draftText = (prompt: Prompt) => prompt.map((part) => ("content" in part ? 
 
 const draftImages = (prompt: Prompt) => prompt.filter((part): part is ImageAttachmentPart => part.type === "image")
 
+const hasPromptContent = (prompt: Prompt) => prompt.some((part) => "content" in part && part.content.trim().length > 0)
+
+const parseEditorPrompt = (editor: HTMLDivElement | undefined): Prompt | undefined => {
+  if (!editor) return undefined
+
+  const parts: Prompt = []
+  let position = 0
+  let buffer = ""
+
+  const flushText = () => {
+    const content = buffer.replace(/\r\n?/g, "\n").replace(/\u200B/g, "")
+    buffer = ""
+    if (!content) return
+    parts.push({ type: "text", content, start: position, end: position + content.length })
+    position += content.length
+  }
+
+  const visit = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      buffer += node.textContent ?? ""
+      return
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return
+
+    const el = node as HTMLElement
+    if (el.dataset.type === "file") {
+      flushText()
+      const content = el.textContent ?? ""
+      parts.push({ type: "file", path: el.dataset.path!, content, start: position, end: position + content.length })
+      position += content.length
+      return
+    }
+    if (el.dataset.type === "agent") {
+      flushText()
+      const content = el.textContent ?? ""
+      parts.push({ type: "agent", name: el.dataset.name!, content, start: position, end: position + content.length })
+      position += content.length
+      return
+    }
+    if (el.tagName === "BR") {
+      buffer += "\n"
+      return
+    }
+
+    for (const child of Array.from(el.childNodes)) visit(child)
+  }
+
+  Array.from(editor.childNodes).forEach((child, index, children) => {
+    const isBlock = child.nodeType === Node.ELEMENT_NODE && ["DIV", "P"].includes((child as HTMLElement).tagName)
+    visit(child)
+    if (isBlock && index < children.length - 1) buffer += "\n"
+  })
+
+  flushText()
+  return parts.length > 0 ? parts : undefined
+}
+
 export async function sendFollowupDraft(input: FollowupSendInput) {
   const text = draftText(input.draft.prompt)
   const images = draftImages(input.draft.prompt)
@@ -289,9 +346,11 @@ export function createPromptSubmit(input: PromptSubmitInput) {
   const handleSubmit = async (event: Event) => {
     event.preventDefault()
 
-    const currentPrompt = prompt.current()
-    const text = currentPrompt.map((part) => ("content" in part ? part.content : "")).join("")
     const images = input.imageAttachments().slice()
+    const storePrompt = prompt.current()
+    const editorPrompt = hasPromptContent(storePrompt) ? undefined : parseEditorPrompt(input.editor())
+    const currentPrompt = editorPrompt ? [...editorPrompt, ...images] : storePrompt
+    const text = currentPrompt.map((part) => ("content" in part ? part.content : "")).join("")
     const mode = input.mode()
 
     if (text.trim().length === 0 && images.length === 0 && input.commentCount() === 0) {
