@@ -1324,6 +1324,7 @@ export default function Layout(props: ParentProps) {
   ) {
     if (!directory) return
     const root = projectRoot(directory)
+    const rootSessionsLoaded = globalSync.project.loadSessions(root, { force: true })
     const navigateProjectRoute = (href: string) => {
       clearSidebarHoverState()
       navigate(href)
@@ -1339,6 +1340,8 @@ export default function Layout(props: ParentProps) {
       navigateProjectRoute(`/${base64Encode(root)}/session`)
       return
     }
+
+    await rootSessionsLoaded
 
     const canOpen = (value: string | undefined) => {
       if (!value) return false
@@ -2063,6 +2066,9 @@ export default function Layout(props: ParentProps) {
     onHoverOpenChanged: (worktree, hoverOpen) => {
       if (!hoverOpen && state.hoverProject && state.hoverProject !== worktree) return
       setState("hoverProject", hoverOpen ? worktree : undefined)
+    },
+    refreshProjectSessions: (directory) => {
+      void globalSync.project.loadSessions(projectRoot(directory), { force: true })
     },
     navigateToProject,
     openSidebar: () => layout.sidebar.open(),

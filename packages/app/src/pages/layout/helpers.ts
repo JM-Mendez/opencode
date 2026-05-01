@@ -34,7 +34,13 @@ const isRootVisibleSession = (session: Session, directory: string) =>
 export const roots = (store: SessionStore) =>
   (store.session ?? []).filter((session) => isRootVisibleSession(session, store.path.directory))
 
+export const rootsForDirectory = (store: SessionStore, directory: string) =>
+  (store.session ?? []).filter((session) => isRootVisibleSession(session, directory))
+
 export const sortedRootSessions = (store: SessionStore, now: number) => roots(store).sort(sortSessions(now))
+
+export const sortedRootSessionsForDirectory = (store: SessionStore, directory: string, now: number) =>
+  rootsForDirectory(store, directory).sort(sortSessions(now))
 
 export const latestRootSession = (stores: SessionStore[], now: number) =>
   stores.flatMap(roots).sort(sortSessions(now))[0]

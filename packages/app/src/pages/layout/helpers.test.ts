@@ -15,6 +15,7 @@ import {
   hasProjectPermissions,
   latestRootSession,
   mobileWorkspaceSections,
+  sortedRootSessionsForDirectory,
   workspaceKey,
 } from "./helpers"
 
@@ -170,6 +171,22 @@ describe("layout workspace helpers", () => {
     )
 
     expect(result?.id).toBe("workspace")
+  })
+
+  test("sorts root sessions using an explicit directory", () => {
+    const result = sortedRootSessionsForDirectory(
+      {
+        path: { directory: "" },
+        session: [
+          session({ id: "other", directory: "/other", time: { created: 3, updated: 3, archived: undefined } }),
+          session({ id: "match", directory: "/workspace", time: { created: 2, updated: 2, archived: undefined } }),
+        ],
+      },
+      "/workspace",
+      120_000,
+    )
+
+    expect(result.map((item) => item.id)).toEqual(["match"])
   })
 
   test("detects project permissions with a filter", () => {

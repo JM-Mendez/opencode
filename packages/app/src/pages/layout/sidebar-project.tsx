@@ -23,6 +23,7 @@ export type ProjectSidebarContext = {
   onProjectMouseLeave: (worktree: string) => void
   onProjectFocus: (worktree: string) => void
   onHoverOpenChanged: (worktree: string, hovered: boolean) => void
+  refreshProjectSessions: (directory: string) => void
   navigateToProject: (directory: string, options?: ProjectNavigateOptions) => void
   openSidebar: () => void
   closeProject: (directory: string) => void
@@ -67,6 +68,7 @@ const ProjectTile = (props: {
   onProjectMouseEnter: (worktree: string, event: MouseEvent) => void
   onProjectMouseLeave: (worktree: string) => void
   onProjectFocus: (worktree: string) => void
+  refreshProjectSessions: (directory: string) => void
   navigateToProject: (directory: string, options?: ProjectNavigateOptions) => void
   showEditProjectDialog: (project: LocalProject) => void
   toggleProjectWorkspaces: (project: LocalProject) => void
@@ -141,6 +143,7 @@ const ProjectTile = (props: {
         onClick={() => {
           props.setOpen(false)
           if (props.selected()) {
+            props.refreshProjectSessions(props.project.worktree)
             layout.sidebar.toggle()
             return
           }
@@ -327,6 +330,7 @@ export const SortableProject = (props: {
       onProjectMouseEnter={props.ctx.onProjectMouseEnter}
       onProjectMouseLeave={props.ctx.onProjectMouseLeave}
       onProjectFocus={props.ctx.onProjectFocus}
+      refreshProjectSessions={props.ctx.refreshProjectSessions}
       navigateToProject={props.ctx.navigateToProject}
       showEditProjectDialog={props.ctx.showEditProjectDialog}
       toggleProjectWorkspaces={props.ctx.toggleProjectWorkspaces}

@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "@solidjs/router"
-import { createEffect, createMemo, For, on, Show, type Accessor, type JSX } from "solid-js"
+import { createEffect, createMemo, For, Show, type Accessor, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { createSortable } from "@thisbeyond/solid-dnd"
 import { createMediaQuery } from "@solid-primitives/media"
@@ -17,7 +17,7 @@ import { type LocalProject } from "@/context/layout"
 import { loadSessionsQuery, useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { createDirectoryDirty, NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
-import { sortedRootSessions, workspaceKey } from "./helpers"
+import { sortedRootSessionsForDirectory, workspaceKey } from "./helpers"
 import { useQuery } from "@tanstack/solid-query"
 
 type InlineEditorComponent = (props: {
@@ -53,28 +53,6 @@ export type WorkspaceSidebarContext = {
   showResetWorkspaceDialog: (root: string, directory: string) => void
   showDeleteWorkspaceDialog: (root: string, directory: string) => void
   setScrollContainerRef: (el: HTMLDivElement | undefined, mobile?: boolean) => void
-}
-
-export type BootSessionLoadSync = {
-  child: (directory: string, options: { bootstrap: true }) => unknown
-  project: {
-    loadSessions: (directory: string, options: { force: true }) => Promise<unknown> | unknown
-  }
-}
-
-export function bootSessionLoad(globalSync: BootSessionLoadSync, directory: string) {
-  globalSync.child(directory, { bootstrap: true })
-  void globalSync.project.loadSessions(directory, { force: true })
-}
-
-export function createBootSessionLoadGate(globalSync: BootSessionLoadSync, directory: string, retryMs = 30_000) {
-  let lastLoad = Number.NEGATIVE_INFINITY
-  return (ready: boolean) => {
-    if (!ready) return
-    if (Date.now() - lastLoad < retryMs) return
-    lastLoad = Date.now()
-    bootSessionLoad(globalSync, directory)
-  }
 }
 
 export const WorkspaceDragOverlay = (props: {
@@ -334,7 +312,7 @@ export const SortableWorkspace = (props: {
     pendingRename: false,
   })
   const slug = createMemo(() => base64Encode(props.directory))
-  const sessions = createMemo(() => sortedRootSessions(workspaceStore, props.sortNow()))
+  const sessions = createMemo(() => sortedRootSessionsForDirectory(workspaceStore, props.directory, props.sortNow()))
   const local = createMemo(() => props.directory === props.project.worktree)
   const active = createMemo(() => workspaceKey(props.ctx.currentDir()) === workspaceKey(props.directory))
   const workspaceValue = createMemo(() => {
@@ -357,8 +335,6 @@ export const SortableWorkspace = (props: {
     setWorkspaceStore("limit", (limit) => (limit ?? 0) + 5)
     await globalSync.project.loadSessions(props.directory)
   }
-  const loadBootSessions = createBootSessionLoadGate(globalSync, props.directory)
-
   const workspaceEditActive = createMemo(() => props.ctx.editorOpen(`workspace:${props.directory}`))
   const header = () => (
     <WorkspaceHeader
@@ -384,9 +360,10 @@ export const SortableWorkspace = (props: {
     if (props.ctx.editorOpen(`workspace:${props.directory}`)) props.ctx.closeEditor()
   }
 
-  createEffect(on(boot, (ready) => {
-    loadBootSessions(ready)
-  }))
+  createEffect(() => {
+    if (!boot()) return
+    globalSync.child(props.directory, { bootstrap: true })
+  })
 
   return (
     <div
@@ -481,7 +458,9 @@ export const LocalWorkspace = (props: {
     return { store, setStore }
   })
   const slug = createMemo(() => base64Encode(props.project.worktree))
-  const sessions = createMemo(() => sortedRootSessions(workspace().store, props.sortNow()))
+  const sessions = createMemo(() =>
+    sortedRootSessionsForDirectory(workspace().store, props.project.worktree, props.sortNow()),
+  )
   const favorites = createMemo(() => {
     const ids = new Set(props.ctx.favoriteSessions())
     return sessions().filter((session) => ids.has(session.id))
@@ -495,7 +474,26 @@ export const LocalWorkspace = (props: {
     await globalSync.project.loadSessions(props.project.worktree)
   }
 
-  createEffect(on(() => props.project.worktree, (directory) => bootSessionLoad(globalSync, directory)))
+  createEffect(() => {
+    if (!props.mobile) return
+    const store = workspace().store
+    const visible = sessions()
+    console.debug("[mobile sessions]", {
+      project: props.project.worktree,
+      path: store.path.directory,
+      sessionTotal: store.sessionTotal,
+      raw: store.session.length,
+      filtered: visible.length,
+      first: store.session[0]
+        ? {
+            id: store.session[0].id,
+            directory: store.session[0].directory,
+            parentID: store.session[0].parentID,
+            archived: store.session[0].time?.archived,
+          }
+        : undefined,
+    })
+  })
 
   return (
     <div
