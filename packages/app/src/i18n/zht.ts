@@ -359,7 +359,6 @@ export const dict = {
   "context.rawMessages.title": "原始訊息",
 
   "context.stats.session": "工作階段",
-  "context.stats.sessionID": "工作階段 ID",
   "context.stats.messages": "訊息數",
   "context.stats.provider": "提供者",
   "context.stats.model": "模型",

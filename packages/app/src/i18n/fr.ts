@@ -332,7 +332,6 @@ export const dict = {
   "context.systemPrompt.title": "Prompt système",
   "context.rawMessages.title": "Messages bruts",
   "context.stats.session": "Session",
-  "context.stats.sessionID": "ID de session",
   "context.stats.messages": "Messages",
   "context.stats.provider": "Fournisseur",
   "context.stats.model": "Modèle",

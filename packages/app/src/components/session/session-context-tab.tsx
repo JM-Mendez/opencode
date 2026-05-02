@@ -1,4 +1,4 @@
-import { createMemo, createEffect, on, onCleanup, For, Show } from "solid-js"
+import { createMemo, createEffect, createSignal, on, onCleanup, For, Show } from "solid-js"
 import type { JSX } from "solid-js"
 import { useSync } from "@/context/sync"
 import { checksum } from "@opencode-ai/core/util/encode"
@@ -8,8 +8,11 @@ import { Icon } from "@opencode-ai/ui/icon"
 import { Accordion } from "@opencode-ai/ui/accordion"
 import { StickyAccordionHeader } from "@opencode-ai/ui/sticky-accordion-header"
 import { File } from "@opencode-ai/ui/file"
+import { IconButton } from "@opencode-ai/ui/icon-button"
 import { Markdown } from "@opencode-ai/ui/markdown"
 import { ScrollView } from "@opencode-ai/ui/scroll-view"
+import { showToast } from "@opencode-ai/ui/toast"
+import * as Clipboard from "@opencode-ai/ui/clipboard"
 import type { Message, Part, UserMessage } from "@opencode-ai/sdk/v2/client"
 import { useLanguage } from "@/context/language"
 import { useProviders } from "@/hooks/use-providers"
@@ -26,10 +29,13 @@ const BREAKDOWN_COLOR: Record<SessionContextBreakdownKey, string> = {
   other: "var(--syntax-comment)",
 }
 
-function Stat(props: { label: string; value: JSX.Element }) {
+function Stat(props: { label: JSX.Element; action?: JSX.Element; value: JSX.Element }) {
   return (
     <div class="flex flex-col gap-1">
-      <div class="text-12-regular text-text-weak">{props.label}</div>
+      <div class="flex items-center gap-1 text-12-regular text-text-weak">
+        <span>{props.label}</span>
+        {props.action}
+      </div>
       <div class="text-12-medium text-text-strong">{props.value}</div>
     </div>
   )
@@ -172,6 +178,8 @@ export function SessionContextTab() {
     return c.modelLabel
   })
 
+  const [copiedSessionID, setCopiedSessionID] = createSignal(false)
+
   const breakdown = createMemo(
     on(
       () => [ctx()?.message.id, ctx()?.input, messages().length, systemPrompt()],
@@ -196,9 +204,55 @@ export function SessionContextTab() {
     return language.t("context.breakdown.other")
   }
 
+  const copySessionID = async () => {
+    if (!params.id) {
+      showToast({
+        variant: "error",
+        title: language.t("common.requestFailed"),
+      })
+      return
+    }
+
+    await Clipboard.writeText(params.id).then(
+      () => {
+        setCopiedSessionID(true)
+        setTimeout(() => setCopiedSessionID(false), 2000)
+      },
+      (err: unknown) => {
+        showToast({
+          variant: "error",
+          title: language.t("common.requestFailed"),
+          description: err instanceof Error ? err.message : typeof err === "string" ? err : undefined,
+        })
+      },
+    )
+  }
+
   const stats = [
-    { label: "context.stats.session", value: () => info()?.title ?? params.id ?? "—" },
-    { label: "context.stats.sessionID", value: () => <span class="select-text break-all">{params.id ?? "—"}</span> },
+    {
+      label: "context.stats.session",
+      action: () => (
+        <IconButton
+          icon={copiedSessionID() ? "check" : "copy"}
+          variant="ghost"
+          class="-my-1 h-5 w-5 text-icon-weak"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={(e) => {
+            e.stopPropagation()
+            void copySessionID()
+          }}
+          aria-label="Copy session ID"
+        />
+      ),
+      value: () => (
+        <div class="flex min-w-0 flex-col gap-0.5">
+          <div class="truncate">{info()?.title ?? params.id ?? "—"}</div>
+          <Show when={params.id}>
+            {(id) => <div class="select-text break-all text-11-regular text-text-weak">ID: {id()}</div>}
+          </Show>
+        </div>
+      ),
+    },
     { label: "context.stats.messages", value: () => counts().all.toLocaleString(language.intl()) },
     { label: "context.stats.provider", value: providerLabel },
     { label: "context.stats.model", value: modelLabel },
@@ -217,7 +271,7 @@ export function SessionContextTab() {
     { label: "context.stats.totalCost", value: cost },
     { label: "context.stats.sessionCreated", value: () => formatter().time(info()?.time.created) },
     { label: "context.stats.lastActivity", value: () => formatter().time(ctx()?.message.time.created) },
-  ] satisfies { label: string; value: () => JSX.Element }[]
+  ] satisfies { label: string; action?: () => JSX.Element; value: () => JSX.Element }[]
 
   let scroll: HTMLDivElement | undefined
   let frame: number | undefined
@@ -280,7 +334,13 @@ export function SessionContextTab() {
       <div class="px-6 pt-4 pb-10 flex flex-col gap-10">
         <div class="grid grid-cols-1 @[32rem]:grid-cols-2 gap-4">
           <For each={stats}>
-            {(stat) => <Stat label={language.t(stat.label as Parameters<typeof language.t>[0])} value={stat.value()} />}
+            {(stat) => (
+              <Stat
+                label={language.t(stat.label as Parameters<typeof language.t>[0])}
+                action={stat.action?.()}
+                value={stat.value()}
+              />
+            )}
           </For>
         </div>
 

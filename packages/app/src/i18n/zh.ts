@@ -376,7 +376,6 @@ export const dict = {
   "context.systemPrompt.title": "系统提示词",
   "context.rawMessages.title": "原始消息",
   "context.stats.session": "会话",
-  "context.stats.sessionID": "会话 ID",
   "context.stats.messages": "消息数",
   "context.stats.provider": "提供商",
   "context.stats.model": "模型",

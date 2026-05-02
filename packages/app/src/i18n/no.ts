@@ -363,7 +363,6 @@ export const dict = {
   "context.rawMessages.title": "Rå meldinger",
 
   "context.stats.session": "Sesjon",
-  "context.stats.sessionID": "Sesjons-ID",
   "context.stats.messages": "Meldinger",
   "context.stats.provider": "Leverandør",
   "context.stats.model": "Modell",

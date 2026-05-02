@@ -328,7 +328,6 @@ export const dict = {
   "context.systemPrompt.title": "시스템 프롬프트",
   "context.rawMessages.title": "원시 메시지",
   "context.stats.session": "세션",
-  "context.stats.sessionID": "세션 ID",
   "context.stats.messages": "메시지",
   "context.stats.provider": "공급자",
   "context.stats.model": "모델",

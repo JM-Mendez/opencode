@@ -360,7 +360,6 @@ export const dict = {
   "context.rawMessages.title": "ข้อความดิบ",
 
   "context.stats.session": "เซสชัน",
-  "context.stats.sessionID": "รหัสเซสชัน",
   "context.stats.messages": "ข้อความ",
   "context.stats.provider": "ผู้ให้บริการ",
   "context.stats.model": "โมเดล",

@@ -362,7 +362,6 @@ export const dict = {
   "context.rawMessages.title": "Исходные сообщения",
 
   "context.stats.session": "Сессия",
-  "context.stats.sessionID": "ID сессии",
   "context.stats.messages": "Сообщения",
   "context.stats.provider": "Провайдер",
   "context.stats.model": "Модель",

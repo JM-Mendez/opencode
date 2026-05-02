@@ -329,7 +329,6 @@ export const dict = {
   "context.systemPrompt.title": "موجه النظام",
   "context.rawMessages.title": "الرسائل الخام",
   "context.stats.session": "جلسة",
-  "context.stats.sessionID": "معرّف الجلسة",
   "context.stats.messages": "رسائل",
   "context.stats.provider": "موفر",
   "context.stats.model": "نموذج",

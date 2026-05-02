@@ -329,7 +329,6 @@ export const dict = {
   "context.systemPrompt.title": "システムプロンプト",
   "context.rawMessages.title": "生のメッセージ",
   "context.stats.session": "セッション",
-  "context.stats.sessionID": "セッションID",
   "context.stats.messages": "メッセージ",
   "context.stats.provider": "プロバイダー",
   "context.stats.model": "モデル",

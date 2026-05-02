@@ -365,7 +365,6 @@ export const dict = {
   "context.rawMessages.title": "Ham mesajlar",
 
   "context.stats.session": "Oturum",
-  "context.stats.sessionID": "Oturum Kimliği",
   "context.stats.messages": "Mesajlar",
   "context.stats.provider": "Sağlayıcı",
   "context.stats.model": "Model",
