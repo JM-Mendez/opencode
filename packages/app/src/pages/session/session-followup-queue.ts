@@ -8,7 +8,7 @@ const idle = { type: "idle" as const }
 
 export const hasActiveAssistantTurn = (messages: FollowupMessage[]) => {
   const latestAssistant = messages.findLast((item) => item.role === "assistant")
-  return !!latestAssistant && (typeof latestAssistant.time.completed !== "number" || latestAssistant.finish === "tool-calls")
+  return !!latestAssistant && typeof latestAssistant.time.completed !== "number"
 }
 
 export const isFollowupQueueActive = (input: {

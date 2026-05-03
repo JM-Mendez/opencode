@@ -24,12 +24,12 @@ describe("hasActiveAssistantTurn", () => {
     ).toBe(false)
   })
 
-  test("treats the latest completed assistant tool-calls turn as active", () => {
+  test("treats the latest completed assistant tool-calls turn as inactive", () => {
     expect(
       hasActiveAssistantTurn([
         { id: "message-1", role: "assistant", time: { created: 1, completed: 2 }, finish: "tool-calls" },
       ]),
-    ).toBe(true)
+    ).toBe(false)
   })
 })
 
@@ -94,7 +94,7 @@ describe("isFollowupQueueEnabled", () => {
       isFollowupQueueEnabled({
         followupMode: "queue",
         sessionID: "session-1",
-        sessionStatus: { type: "idle" },
+        sessionStatus: { type: "busy" },
         messages: [{ id: "message-1", role: "assistant", time: { created: 1, completed: 2 }, finish: "tool-calls" }],
         blocked: false,
         childSession: false,
@@ -147,23 +147,26 @@ describe("shouldDrainQueuedFollowup", () => {
     ).toBe(true)
   })
 
-  test("does not drain while the latest completed assistant turn finished with tool calls", () => {
+  test("drains after an idle continued chat whose latest assistant turn finished with tool calls", () => {
     expect(
       shouldDrainQueuedFollowup({
         ...drainInput(),
+        messages: [{ id: "message-1", role: "assistant", time: { created: 1, completed: 2 }, finish: "tool-calls" }],
+      }),
+    ).toBe(true)
+  })
+
+  test("does not drain completed tool-call turns while the session is busy", () => {
+    expect(
+      shouldDrainQueuedFollowup({
+        ...drainInput(),
+        sessionStatus: { type: "busy" },
         messages: [{ id: "message-1", role: "assistant", time: { created: 1, completed: 2 }, finish: "tool-calls" }],
       }),
     ).toBe(false)
   })
 
   test("recovers after a later completed assistant turn finishes with stop", () => {
-    expect(
-      shouldDrainQueuedFollowup({
-        ...drainInput(),
-        messages: [{ id: "message-1", role: "assistant", time: { created: 1, completed: 2 }, finish: "tool-calls" }],
-      }),
-    ).toBe(false)
-
     expect(
       shouldDrainQueuedFollowup({
         ...drainInput(),
