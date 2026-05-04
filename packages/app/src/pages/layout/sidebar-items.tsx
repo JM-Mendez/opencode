@@ -148,7 +148,8 @@ export const ProjectIcon = (props: { project: LocalProject; class?: string; noti
                 "absolute top-px right-px size-1.5 rounded-full z-10": true,
                 "bg-surface-warning-strong": hasPermissions(),
                 "bg-icon-critical-base": !hasPermissions() && hasError(),
-                "bg-text-interactive-base": !hasPermissions() && !hasError(),
+                "bg-icon-success-base": !hasPermissions() && !hasError() && isRunning(),
+                "bg-text-interactive-base": !hasPermissions() && !hasError() && !isRunning(),
               }}
             />
           }
