@@ -371,6 +371,7 @@ export const layer: Layer.Layer<
             agent: {
               name: "commit",
               mode: "primary",
+              options: {},
               permission: [],
             },
             user: {
@@ -478,7 +479,32 @@ export const layer: Layer.Layer<
       }),
       push: Effect.fn("Vcs.push")(function* () {
         const ctx = yield* InstanceState.context
-        if (ctx.project.vcs === "git") yield* git.push(ctx.directory)
+        if (ctx.project.vcs === "git") {
+          const [topLevel, primary] = yield* Effect.all([git.topLevel(ctx.directory), git.primaryWorktree(ctx.directory)], {
+            concurrency: 2,
+          })
+          if (!topLevel || !primary || topLevel === primary) {
+            yield* git.push(ctx.directory)
+            return yield* changes()
+          }
+
+          const [workspaceBranch, primaryBranch, primaryStaged, primaryUnstaged] = yield* Effect.all(
+            [git.branch(ctx.directory), git.branch(primary), git.statusStaged(primary), git.statusUnstaged(primary)],
+            { concurrency: 4 },
+          )
+          if (!workspaceBranch) return yield* new Git.FailedError({ message: "Cannot push linked worktree without a branch" })
+          if (!primaryBranch) return yield* new Git.FailedError({ message: "Cannot push primary worktree without a branch" })
+          const parentBranch = (yield* git.createdFrom(ctx.directory, workspaceBranch)) ?? primaryBranch
+          if (primaryStaged.length > 0 || primaryUnstaged.length > 0) {
+            return yield* new Git.FailedError({
+              message: "Cannot sync linked worktree while primary worktree has uncommitted changes",
+            })
+          }
+          if (primaryBranch !== parentBranch) yield* git.checkout(primary, parentBranch)
+          yield* git.pull(primary)
+          yield* git.merge(primary, workspaceBranch)
+          yield* git.push(primary)
+        }
         return yield* changes()
       }),
       pull: Effect.fn("Vcs.pull")(function* () {

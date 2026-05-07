@@ -156,6 +156,81 @@ describeVcs("Vcs", () => {
   })
 })
 
+describe("Vcs push", () => {
+  afterEach(async () => {
+    await Instance.disposeAll()
+  })
+
+  test("push() syncs a linked worktree branch through the primary worktree parent branch", async () => {
+    await using origin = await tmpdir()
+    await using root = await tmpdir({ git: true })
+    await using workspaceParent = await tmpdir()
+    const workspace = path.join(workspaceParent.path, "workspace")
+
+    await $`git init --bare`.cwd(origin.path).quiet()
+    await $`git branch -M main`.cwd(root.path).quiet()
+    await $`git remote add origin ${origin.path}`.cwd(root.path).quiet()
+    await $`git push -u origin main`.cwd(root.path).quiet()
+    await $`git checkout -b parent/test`.cwd(root.path).quiet()
+    await $`git push -u origin parent/test`.cwd(root.path).quiet()
+    await $`git worktree add -b workspace/test ${workspace} parent/test`.cwd(root.path).quiet()
+    const mainHead = (await $`git rev-parse main`.cwd(root.path).text()).trim()
+    await $`git checkout main`.cwd(root.path).quiet()
+    await fs.writeFile(path.join(workspace, "workspace.txt"), "workspace change\n", "utf-8")
+    await $`git add workspace.txt`.cwd(workspace).quiet()
+    await $`git commit --no-gpg-sign -m "workspace change"`.cwd(workspace).quiet()
+    const workspaceHead = (await $`git rev-parse HEAD`.cwd(workspace).text()).trim()
+
+    await withVcsOnly(workspace, async () => {
+      await AppRuntime.runPromise(
+        Effect.gen(function* () {
+          const vcs = yield* Vcs.Service
+          return yield* vcs.push()
+        }),
+      )
+    })
+
+    expect((await $`git rev-parse parent/test`.cwd(root.path).text()).trim()).toBe(workspaceHead)
+    expect((await $`git rev-parse main`.cwd(root.path).text()).trim()).toBe(mainHead)
+    expect((await $`git --git-dir ${origin.path} rev-parse refs/heads/parent/test`.text()).trim()).toBe(workspaceHead)
+    expect((await $`git --git-dir ${origin.path} rev-parse --verify refs/heads/workspace/test`.quiet().nothrow()).exitCode).not.toBe(0)
+  })
+
+  test("push() rejects linked worktree sync when primary worktree is dirty", async () => {
+    await using origin = await tmpdir()
+    await using root = await tmpdir({ git: true })
+    await using workspaceParent = await tmpdir()
+    const workspace = path.join(workspaceParent.path, "workspace")
+
+    await $`git init --bare`.cwd(origin.path).quiet()
+    await $`git branch -M main`.cwd(root.path).quiet()
+    await $`git remote add origin ${origin.path}`.cwd(root.path).quiet()
+    await $`git push -u origin main`.cwd(root.path).quiet()
+    await $`git checkout -b parent/test`.cwd(root.path).quiet()
+    await $`git push -u origin parent/test`.cwd(root.path).quiet()
+    await $`git worktree add -b workspace/test ${workspace} parent/test`.cwd(root.path).quiet()
+    const parentHead = (await $`git rev-parse parent/test`.cwd(root.path).text()).trim()
+    await fs.writeFile(path.join(root.path, "dirty.txt"), "dirty primary\n", "utf-8")
+    await fs.writeFile(path.join(workspace, "workspace.txt"), "workspace change\n", "utf-8")
+    await $`git add workspace.txt`.cwd(workspace).quiet()
+    await $`git commit --no-gpg-sign -m "workspace change"`.cwd(workspace).quiet()
+
+    await withVcsOnly(workspace, async () => {
+      await expect(
+        AppRuntime.runPromise(
+          Effect.gen(function* () {
+            const vcs = yield* Vcs.Service
+            return yield* vcs.push()
+          }),
+        ),
+      ).rejects.toThrow("Cannot sync linked worktree while primary worktree has uncommitted changes")
+    })
+
+    expect((await $`git rev-parse parent/test`.cwd(root.path).text()).trim()).toBe(parentHead)
+    expect((await $`git --git-dir ${origin.path} rev-parse refs/heads/parent/test`.text()).trim()).toBe(parentHead)
+  })
+})
+
 describe("Vcs diff", () => {
   afterEach(async () => {
     await Instance.disposeAll()

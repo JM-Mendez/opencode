@@ -721,7 +721,8 @@ async function pushToNewBranch(summary: string, branch: string) {
   await $`git commit -m "${summary}
 
 Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
-  await $`git push -u origin ${branch}`
+  await ensureGitHubCliAuth()
+  await $`git push -u origin ${branch}`.env(gitHubAuthEnv())
 }
 
 async function pushToLocalBranch(summary: string) {
@@ -732,7 +733,8 @@ async function pushToLocalBranch(summary: string) {
   await $`git commit -m "${summary}
 
 Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
-  await $`git push`
+  await ensureGitHubCliAuth()
+  await $`git push`.env(gitHubAuthEnv())
 }
 
 async function pushToForkBranch(summary: string, pr: GitHubPullRequest) {
@@ -745,7 +747,21 @@ async function pushToForkBranch(summary: string, pr: GitHubPullRequest) {
   await $`git commit -m "${summary}
 
 Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
-  await $`git push fork HEAD:${remoteBranch}`
+  await ensureGitHubCliAuth()
+  await $`git push fork HEAD:${remoteBranch}`.env(gitHubAuthEnv())
+}
+
+function gitHubAuthEnv() {
+  return {
+    ...process.env,
+    GH_TOKEN: accessToken,
+    GITHUB_TOKEN: accessToken,
+  }
+}
+
+async function ensureGitHubCliAuth() {
+  console.log("Ensuring GitHub CLI git auth...")
+  await $`gh auth setup-git --hostname github.com --force`.env(gitHubAuthEnv())
 }
 
 async function branchIsDirty() {

@@ -70,6 +70,9 @@ export interface Options {
 export interface Interface {
   readonly run: (args: string[], opts: Options) => Effect.Effect<Result>
   readonly branch: (cwd: string) => Effect.Effect<string | undefined>
+  readonly createdFrom: (cwd: string, branch: string) => Effect.Effect<string | undefined>
+  readonly topLevel: (cwd: string) => Effect.Effect<string | undefined>
+  readonly primaryWorktree: (cwd: string) => Effect.Effect<string | undefined>
   readonly prefix: (cwd: string) => Effect.Effect<string>
   readonly defaultBranch: (cwd: string) => Effect.Effect<Base | undefined>
   readonly hasHead: (cwd: string) => Effect.Effect<boolean>
@@ -88,6 +91,8 @@ export interface Interface {
   readonly unstage: (cwd: string, paths: readonly string[]) => Effect.Effect<void, FailedError>
   readonly revertUnstaged: (cwd: string, paths: readonly string[]) => Effect.Effect<void, FailedError>
   readonly commit: (cwd: string, message: string) => Effect.Effect<void, FailedError>
+  readonly checkout: (cwd: string, branch: string) => Effect.Effect<void, FailedError>
+  readonly merge: (cwd: string, branch: string) => Effect.Effect<void, FailedError>
   readonly push: (cwd: string) => Effect.Effect<void, FailedError>
   readonly pull: (cwd: string) => Effect.Effect<void, FailedError>
 }
@@ -101,6 +106,8 @@ const kind = (code: string): Kind => {
 }
 
 const paths = (items: readonly string[]) => (items.length ? ["--", ...items] : ["--", "."])
+const createdFromSubject = (subject: string) =>
+  subject.match(/^branch: Created from (.+)$/)?.[1]?.trim().replace(/^refs\/heads\//, "")
 
 const items = (text: string) =>
   nuls(text).flatMap((item) => {
@@ -215,6 +222,34 @@ export const layer = Layer.effect(
       if (result.exitCode !== 0) return
       const text = out(result)
       return text || undefined
+    })
+
+    const createdFrom = Effect.fn("Git.createdFrom")(function* (cwd: string, branch: string) {
+      const result = yield* run(["reflog", "show", "--max-count=1", "--format=%gs", branch], { cwd })
+      if (result.exitCode !== 0) return
+      const ref =
+        createdFromSubject(out(result)) ??
+        (yield* lines(["reflog", "show", "--format=%gs", branch], { cwd }))
+          .map(createdFromSubject)
+          .find((item) => item)
+      if (!ref || ref === "HEAD" || /^[0-9a-f]{7,40}$/i.test(ref)) return
+      return ref
+    })
+
+    const topLevel = Effect.fn("Git.topLevel")(function* (cwd: string) {
+      const result = yield* run(["rev-parse", "--show-toplevel"], { cwd })
+      if (result.exitCode !== 0) return
+      return out(result) || undefined
+    })
+
+    const primaryWorktree = Effect.fn("Git.primaryWorktree")(function* (cwd: string) {
+      const result = yield* run(["worktree", "list", "--porcelain"], { cwd })
+      if (result.exitCode !== 0) return
+      return result
+        .text()
+        .split(/\r?\n/)
+        .find((line) => line.startsWith("worktree "))
+        ?.slice("worktree ".length)
     })
 
     const prefix = Effect.fn("Git.prefix")(function* (cwd: string) {
@@ -352,6 +387,14 @@ export const layer = Layer.effect(
       yield* ensure(yield* run(["commit", "-m", message], { cwd }))
     })
 
+    const checkout = Effect.fn("Git.checkout")(function* (cwd: string, branch: string) {
+      yield* ensure(yield* run(["checkout", branch], { cwd }))
+    })
+
+    const merge = Effect.fn("Git.merge")(function* (cwd: string, branch: string) {
+      yield* ensure(yield* run(["merge", "--ff-only", branch], { cwd }))
+    })
+
     const push = Effect.fn("Git.push")(function* (cwd: string) {
       yield* ensure(yield* run(["push"], { cwd }))
     })
@@ -363,6 +406,9 @@ export const layer = Layer.effect(
     return Service.of({
       run,
       branch,
+      createdFrom,
+      topLevel,
+      primaryWorktree,
       prefix,
       defaultBranch,
       hasHead,
@@ -381,6 +427,8 @@ export const layer = Layer.effect(
       unstage,
       revertUnstaged,
       commit,
+      checkout,
+      merge,
       push,
       pull,
     })
