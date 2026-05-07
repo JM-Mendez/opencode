@@ -15,6 +15,7 @@ import {
   hasProjectPermissions,
   latestRootSession,
   mobileWorkspaceSections,
+  regularWorkspaceSessions,
   sortedRootSessionsForDirectory,
   workspaceKey,
 } from "./helpers"
@@ -147,6 +148,15 @@ describe("layout workspace helpers", () => {
         favorites: ["api"],
       }),
     ).toEqual([{ id: "workspaces", workspaces: ["/repo", "/repo/.worktrees/api"] }])
+  })
+
+  test("filters favorite sessions from the regular workspace chat list", () => {
+    expect(
+      regularWorkspaceSessions({
+        sessions: [session({ id: "root", directory: "/repo" }), session({ id: "api", directory: "/repo/.worktrees/api" })],
+        favorites: ["api"],
+      }).map((item) => item.id),
+    ).toEqual(["root"])
   })
 
   test("finds the latest root session across workspaces", () => {

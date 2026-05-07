@@ -17,7 +17,7 @@ import { type LocalProject } from "@/context/layout"
 import { loadSessionsQuery, useGlobalSync } from "@/context/global-sync"
 import { useLanguage } from "@/context/language"
 import { createDirectoryDirty, NewSessionItem, SessionItem, SessionSkeleton } from "./sidebar-items"
-import { sortedRootSessionsForDirectory, workspaceKey } from "./helpers"
+import { regularWorkspaceSessions, sortedRootSessionsForDirectory, workspaceKey } from "./helpers"
 import { useQuery } from "@tanstack/solid-query"
 
 type InlineEditorComponent = (props: {
@@ -312,7 +312,10 @@ export const SortableWorkspace = (props: {
     pendingRename: false,
   })
   const slug = createMemo(() => base64Encode(props.directory))
-  const sessions = createMemo(() => sortedRootSessionsForDirectory(workspaceStore, props.directory, props.sortNow()))
+  const allSessions = createMemo(() => sortedRootSessionsForDirectory(workspaceStore, props.directory, props.sortNow()))
+  const sessions = createMemo(() =>
+    props.mobile ? regularWorkspaceSessions({ sessions: allSessions(), favorites: props.ctx.favoriteSessions() }) : allSessions(),
+  )
   const local = createMemo(() => props.directory === props.project.worktree)
   const active = createMemo(() => workspaceKey(props.ctx.currentDir()) === workspaceKey(props.directory))
   const workspaceValue = createMemo(() => {
@@ -322,7 +325,7 @@ export const SortableWorkspace = (props: {
   })
   const open = createMemo(() => props.ctx.workspaceExpanded(props.directory, local()))
   const boot = createMemo(() => open() || active())
-  const count = createMemo(() => sessions()?.length ?? 0)
+  const count = createMemo(() => allSessions()?.length ?? 0)
   const hasMore = createMemo(() => workspaceStore.sessionTotal > count())
   const query = useQuery(() => ({ ...loadSessionsQuery(props.directory) }))
   const busy = createMemo(() => props.ctx.isBusy(props.directory))
@@ -458,14 +461,17 @@ export const LocalWorkspace = (props: {
     return { store, setStore }
   })
   const slug = createMemo(() => base64Encode(props.project.worktree))
-  const sessions = createMemo(() =>
+  const allSessions = createMemo(() =>
     sortedRootSessionsForDirectory(workspace().store, props.project.worktree, props.sortNow()),
+  )
+  const sessions = createMemo(() =>
+    props.mobile ? regularWorkspaceSessions({ sessions: allSessions(), favorites: props.ctx.favoriteSessions() }) : allSessions(),
   )
   const favorites = createMemo(() => {
     const ids = new Set(props.ctx.favoriteSessions())
-    return sessions().filter((session) => ids.has(session.id))
+    return allSessions().filter((session) => ids.has(session.id))
   })
-  const count = createMemo(() => sessions()?.length ?? 0)
+  const count = createMemo(() => allSessions()?.length ?? 0)
   const query = useQuery(() => ({ ...loadSessionsQuery(props.project.worktree) }))
   const hasMore = createMemo(() => workspace().store.sessionTotal > count())
   const loading = () => query.isLoading && count() === 0
@@ -507,7 +513,7 @@ export const LocalWorkspace = (props: {
             {(session) => (
               <SessionItem
                 session={session}
-                list={sessions()}
+                list={allSessions()}
                 navList={props.ctx.navList}
                 slug={base64Encode(session.directory)}
                 mobile={props.mobile}

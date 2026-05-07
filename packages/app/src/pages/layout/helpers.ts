@@ -119,3 +119,8 @@ export const mobileWorkspaceSections = (input: {
     { id: "workspaces", workspaces: input.workspaces },
   ]
 }
+
+export const regularWorkspaceSessions = (input: { sessions: Session[]; favorites: string[] }): Session[] => {
+  const favoriteIDs = new Set(input.favorites)
+  return input.sessions.filter((session) => !favoriteIDs.has(session.id))
+}
