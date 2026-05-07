@@ -410,6 +410,13 @@ export type EventTuiToastShow = {
   }
 }
 
+export type EventTuiWindowFocus = {
+  type: "tui.window.focus"
+  properties: {
+    focused: boolean
+  }
+}
+
 export type EventTuiSessionSelect = {
   type: "tui.session.select"
   properties: {
@@ -1134,6 +1141,7 @@ export type GlobalEvent = {
     | EventTuiPromptAppend
     | EventTuiCommandExecute
     | EventTuiToastShow
+    | EventTuiWindowFocus
     | EventTuiSessionSelect
     | EventMcpToolsChanged
     | EventMcpBrowserOpenFailed
@@ -2077,6 +2085,7 @@ export type Event =
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
+  | EventTuiWindowFocus
   | EventTuiSessionSelect
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
@@ -2148,6 +2157,28 @@ export type VcsFileDiff = {
   additions: number
   deletions: number
   status?: "added" | "deleted" | "modified"
+}
+
+export type VcsChangeSet = {
+  branch?: string
+  default_branch?: string
+  upstream?: string
+  ahead: number
+  behind: number
+  staged: Array<VcsFileDiff>
+  unstaged: Array<VcsFileDiff>
+}
+
+export type VcsCommitMessageResponse = {
+  message: string
+}
+
+export type VcsPathsRequest = {
+  paths?: Array<string>
+}
+
+export type VcsCommitRequest = {
+  message: string
 }
 
 export type Command = {
@@ -5286,7 +5317,7 @@ export type TuiShowToastResponses = {
 export type TuiShowToastResponse = TuiShowToastResponses[keyof TuiShowToastResponses]
 
 export type TuiPublishData = {
-  body?: EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow | EventTuiSessionSelect
+  body?: EventTuiPromptAppend | EventTuiCommandExecute | EventTuiToastShow | EventTuiWindowFocus | EventTuiSessionSelect
   path?: never
   query?: {
     directory?: string
@@ -5467,6 +5498,165 @@ export type VcsDiffResponses = {
 }
 
 export type VcsDiffResponse = VcsDiffResponses[keyof VcsDiffResponses]
+
+export type VcsChangesData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/changes"
+}
+
+export type VcsChangesResponses = {
+  /**
+   * VCS changes
+   */
+  200: VcsChangeSet
+}
+
+export type VcsChangesResponse = VcsChangesResponses[keyof VcsChangesResponses]
+
+export type VcsCommitMessageData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/commit-message"
+}
+
+export type VcsCommitMessageErrors = {
+  /**
+   * No staged changes
+   */
+  400: unknown
+}
+
+export type VcsCommitMessageResponses = {
+  /**
+   * Generated commit message
+   */
+  200: VcsCommitMessageResponse
+}
+
+export type VcsCommitMessageResponse2 = VcsCommitMessageResponses[keyof VcsCommitMessageResponses]
+
+export type VcsStageData = {
+  body?: VcsPathsRequest
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/stage"
+}
+
+export type VcsStageResponses = {
+  /**
+   * VCS changes
+   */
+  200: VcsChangeSet
+}
+
+export type VcsStageResponse = VcsStageResponses[keyof VcsStageResponses]
+
+export type VcsUnstageData = {
+  body?: VcsPathsRequest
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/unstage"
+}
+
+export type VcsUnstageResponses = {
+  /**
+   * VCS changes
+   */
+  200: VcsChangeSet
+}
+
+export type VcsUnstageResponse = VcsUnstageResponses[keyof VcsUnstageResponses]
+
+export type VcsRevertData = {
+  body?: VcsPathsRequest
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/revert"
+}
+
+export type VcsRevertResponses = {
+  /**
+   * VCS changes
+   */
+  200: VcsChangeSet
+}
+
+export type VcsRevertResponse = VcsRevertResponses[keyof VcsRevertResponses]
+
+export type VcsCommitData = {
+  body?: VcsCommitRequest
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/commit"
+}
+
+export type VcsCommitResponses = {
+  /**
+   * VCS changes
+   */
+  200: VcsChangeSet
+}
+
+export type VcsCommitResponse = VcsCommitResponses[keyof VcsCommitResponses]
+
+export type VcsPushData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/push"
+}
+
+export type VcsPushResponses = {
+  /**
+   * VCS changes
+   */
+  200: VcsChangeSet
+}
+
+export type VcsPushResponse = VcsPushResponses[keyof VcsPushResponses]
+
+export type VcsPullData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/vcs/pull"
+}
+
+export type VcsPullResponses = {
+  /**
+   * VCS changes
+   */
+  200: VcsChangeSet
+}
+
+export type VcsPullResponse = VcsPullResponses[keyof VcsPullResponses]
 
 export type CommandListData = {
   body?: never

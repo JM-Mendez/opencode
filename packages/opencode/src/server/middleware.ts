@@ -13,6 +13,12 @@ import { compress } from "hono/compress"
 
 const log = Log.create({ service: "server" })
 
+const errorMessage = (err: unknown) => {
+  if (err instanceof Error) return err.stack || err.message
+  if (typeof err === "object" && err !== null && "message" in err && typeof err.message === "string") return err.message
+  return String(err)
+}
+
 export const ErrorMiddleware: ErrorHandler = (err, c) => {
   log.error("failed", {
     error: err,
@@ -30,8 +36,7 @@ export const ErrorMiddleware: ErrorHandler = (err, c) => {
     return c.json(new NamedError.Unknown({ message: err.message }).toObject(), { status: 400 })
   }
   if (err instanceof HTTPException) return err.getResponse()
-  const message = err instanceof Error && err.stack ? err.stack : err.toString()
-  return c.json(new NamedError.Unknown({ message }).toObject(), {
+  return c.json(new NamedError.Unknown({ message: errorMessage(err) }).toObject(), {
     status: 500,
   })
 }

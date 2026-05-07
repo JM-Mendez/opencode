@@ -36,7 +36,7 @@ import { ProviderRoutes } from "./provider"
 import { EventRoutes } from "./event"
 import { SyncRoutes } from "./sync"
 import { InstanceMiddleware } from "./middleware"
-import { jsonRequest } from "./trace"
+import { jsonRequest, runRequest } from "./trace"
 
 export const InstanceRoutes = (upgrade: UpgradeWebSocket): Hono => {
   const app = new Hono()
@@ -82,6 +82,14 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket): Hono => {
     app.post(InstancePaths.dispose, (c) => handler(c.req.raw, context))
     app.get(InstancePaths.vcs, (c) => handler(c.req.raw, context))
     app.get(InstancePaths.vcsDiff, (c) => handler(c.req.raw, context))
+    app.get(InstancePaths.vcsChanges, (c) => handler(c.req.raw, context))
+    app.post(InstancePaths.vcsCommitMessage, (c) => handler(c.req.raw, context))
+    app.post(InstancePaths.vcsStage, (c) => handler(c.req.raw, context))
+    app.post(InstancePaths.vcsUnstage, (c) => handler(c.req.raw, context))
+    app.post(InstancePaths.vcsRevert, (c) => handler(c.req.raw, context))
+    app.post(InstancePaths.vcsCommit, (c) => handler(c.req.raw, context))
+    app.post(InstancePaths.vcsPush, (c) => handler(c.req.raw, context))
+    app.post(InstancePaths.vcsPull, (c) => handler(c.req.raw, context))
     app.get(InstancePaths.command, (c) => handler(c.req.raw, context))
     app.get(InstancePaths.agent, (c) => handler(c.req.raw, context))
     app.get(InstancePaths.skill, (c) => handler(c.req.raw, context))
@@ -274,6 +282,142 @@ export const InstanceRoutes = (upgrade: UpgradeWebSocket): Hono => {
         jsonRequest("InstanceRoutes.vcs.diff", c, function* () {
           const vcs = yield* Vcs.Service
           return yield* vcs.diff(c.req.valid("query").mode)
+        }),
+    )
+    .get(
+      "/vcs/changes",
+      describeRoute({
+        summary: "Get VCS changes",
+        description: "Retrieve staged and unstaged git changes for the working tree.",
+        operationId: "vcs.changes",
+        responses: {
+          200: {
+            description: "VCS changes",
+            content: {
+              "application/json": {
+                schema: resolver(Vcs.ChangeSet.zod),
+              },
+            },
+          },
+        },
+      }),
+      async (c) =>
+        jsonRequest("InstanceRoutes.vcs.changes", c, function* () {
+          const vcs = yield* Vcs.Service
+          return yield* vcs.changes()
+        }),
+    )
+    .post(
+      "/vcs/commit-message",
+      describeRoute({
+        summary: "Generate VCS commit message",
+        operationId: "vcs.commitMessage",
+        responses: {
+          200: {
+            description: "Generated commit message",
+            content: { "application/json": { schema: resolver(Vcs.CommitMessageResponse.zod) } },
+          },
+          400: { description: "No staged changes" },
+        },
+      }),
+      async (c) => {
+        try {
+          return c.json(
+            await runRequest(
+              "InstanceRoutes.vcs.commitMessage",
+              c,
+              Effect.gen(function* () {
+                const vcs = yield* Vcs.Service
+                return yield* vcs.commitMessage()
+              }),
+            ),
+          )
+        } catch (err) {
+          if (err instanceof Vcs.NoStagedChangesError) return c.json({ message: err.message }, 400)
+          throw err
+        }
+      },
+    )
+    .post(
+      "/vcs/stage",
+      describeRoute({
+        summary: "Stage VCS paths",
+        operationId: "vcs.stage",
+        responses: { 200: { description: "VCS changes", content: { "application/json": { schema: resolver(Vcs.ChangeSet.zod) } } } },
+      }),
+      validator("json", Vcs.PathsRequest.zod),
+      async (c) =>
+        jsonRequest("InstanceRoutes.vcs.stage", c, function* () {
+          const vcs = yield* Vcs.Service
+          return yield* vcs.stage(c.req.valid("json").paths ?? [])
+        }),
+    )
+    .post(
+      "/vcs/unstage",
+      describeRoute({
+        summary: "Unstage VCS paths",
+        operationId: "vcs.unstage",
+        responses: { 200: { description: "VCS changes", content: { "application/json": { schema: resolver(Vcs.ChangeSet.zod) } } } },
+      }),
+      validator("json", Vcs.PathsRequest.zod),
+      async (c) =>
+        jsonRequest("InstanceRoutes.vcs.unstage", c, function* () {
+          const vcs = yield* Vcs.Service
+          return yield* vcs.unstage(c.req.valid("json").paths ?? [])
+        }),
+    )
+    .post(
+      "/vcs/revert",
+      describeRoute({
+        summary: "Revert unstaged VCS paths",
+        operationId: "vcs.revert",
+        responses: { 200: { description: "VCS changes", content: { "application/json": { schema: resolver(Vcs.ChangeSet.zod) } } } },
+      }),
+      validator("json", Vcs.PathsRequest.zod),
+      async (c) =>
+        jsonRequest("InstanceRoutes.vcs.revert", c, function* () {
+          const vcs = yield* Vcs.Service
+          return yield* vcs.revertUnstaged(c.req.valid("json").paths ?? [])
+        }),
+    )
+    .post(
+      "/vcs/commit",
+      describeRoute({
+        summary: "Commit staged VCS changes",
+        operationId: "vcs.commit",
+        responses: { 200: { description: "VCS changes", content: { "application/json": { schema: resolver(Vcs.ChangeSet.zod) } } } },
+      }),
+      validator("json", Vcs.CommitRequest.zod),
+      async (c) =>
+        jsonRequest("InstanceRoutes.vcs.commit", c, function* () {
+          const vcs = yield* Vcs.Service
+          return yield* vcs.commit(c.req.valid("json").message)
+        }),
+    )
+    .post(
+      "/vcs/push",
+      describeRoute({
+        summary: "Push VCS branch",
+        operationId: "vcs.push",
+        responses: { 200: { description: "VCS changes", content: { "application/json": { schema: resolver(Vcs.ChangeSet.zod) } } } },
+      }),
+      async (c) =>
+        jsonRequest("InstanceRoutes.vcs.push", c, function* () {
+          const vcs = yield* Vcs.Service
+          return yield* vcs.push()
+        }),
+    )
+    .post(
+      "/vcs/pull",
+      describeRoute({
+        summary: "Pull VCS branch",
+        operationId: "vcs.pull",
+        responses: { 200: { description: "VCS changes", content: { "application/json": { schema: resolver(Vcs.ChangeSet.zod) } } } },
+      }),
+      async (c) =>
+        jsonRequest("InstanceRoutes.vcs.pull", c, function* () {
+          const vcs = yield* Vcs.Service
+          return yield* vcs.pull()
         }),
     )
     .get(

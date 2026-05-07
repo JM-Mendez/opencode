@@ -45,6 +45,11 @@
     column-gap: 12px;
   }
 
+  [data-slot="session-review-subheader"] {
+    flex-shrink: 0;
+    background-color: var(--background-stronger);
+  }
+
   [data-slot="session-review-actions"] [data-component="radio-group"] {
     [data-slot="radio-group-wrapper"],
     [data-slot="radio-group-indicator"],

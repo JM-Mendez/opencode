@@ -70,6 +70,19 @@ describe("instance HttpApi", () => {
     )
   })
 
+  test("commit message generation reports a clear error when nothing is staged", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    const response = await app().request("/vcs/commit-message", {
+      method: "POST",
+      headers: { "x-opencode-directory": tmp.path, "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+
+    expect(response.status).toBe(400)
+    expect((await response.text()).toLowerCase()).toContain("staged")
+  })
+
   test("serves catalog read endpoints through Hono bridge", async () => {
     await using tmp = await tmpdir({ config: { formatter: false, lsp: false } })
 

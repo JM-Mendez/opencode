@@ -94,6 +94,12 @@ describe("formatServerError", () => {
     expect(formatServerError(0, language.t)).toBe("Erro desconhecido")
   })
 
+  test("returns generic server error data messages", () => {
+    expect(formatServerError({ name: "UnknownError", data: { message: "git push failed" } }, language.t)).toBe(
+      "git push failed",
+    )
+  })
+
   test("falls back for unknown error objects and names", () => {
     expect(formatServerError({ name: "ServerTimeoutError", data: { seconds: 30 } }, language.t)).toBe(
       "Erro desconhecido",

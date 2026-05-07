@@ -106,8 +106,9 @@ export interface SessionReviewProps {
   onScroll?: JSX.EventHandlerUnion<HTMLDivElement, Event>
   class?: string
   classList?: Record<string, boolean | undefined>
-  classes?: { root?: string; header?: string; container?: string }
+  classes?: { root?: string; header?: string; subheader?: string; container?: string }
   actions?: JSX.Element
+  subheader?: JSX.Element
   diffs: ReviewDiff[]
   onViewFile?: (file: string) => void
   readFile?: (path: string) => Promise<FileContent | undefined>
@@ -366,6 +367,11 @@ export const SessionReview = (props: SessionReviewProps) => {
           {props.actions}
         </div>
       </div>
+      <Show when={props.subheader}>
+        <div data-slot="session-review-subheader" class={props.classes?.subheader ?? props.classes?.header}>
+          {props.subheader}
+        </div>
+      </Show>
 
       <ScrollView
         data-slot="session-review-scroll"

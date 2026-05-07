@@ -39,8 +39,10 @@ export interface SessionReviewTabProps {
   classes?: {
     root?: string
     header?: string
+    subheader?: string
     container?: string
   }
+  subheader?: JSX.Element
 }
 
 export function SessionReviewTab(props: SessionReviewTabProps) {
@@ -149,8 +151,10 @@ export function SessionReviewTab(props: SessionReviewTabProps) {
       classes={{
         root: props.classes?.root ?? "pr-3",
         header: props.classes?.header ?? "px-3",
+        subheader: props.classes?.subheader ?? props.classes?.header ?? "px-3",
         container: props.classes?.container ?? "pl-3",
       }}
+      subheader={props.subheader}
       diffs={props.diffs()}
       diffStyle={props.diffStyle}
       onDiffStyleChange={props.onDiffStyleChange}

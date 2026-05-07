@@ -7,7 +7,7 @@ import { Vcs } from "@/project"
 import { Skill } from "@/skill"
 import * as InstanceState from "@/effect/instance-state"
 import { Effect, Layer, Schema } from "effect"
-import { HttpApi, HttpApiBuilder, HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
+import { HttpApi, HttpApiBuilder, HttpApiEndpoint, HttpApiError, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { Authorization } from "./auth"
 import { markInstanceForDisposal } from "./lifecycle"
 
@@ -28,6 +28,14 @@ export const InstancePaths = {
   path: "/path",
   vcs: "/vcs",
   vcsDiff: "/vcs/diff",
+  vcsChanges: "/vcs/changes",
+  vcsCommitMessage: "/vcs/commit-message",
+  vcsStage: "/vcs/stage",
+  vcsUnstage: "/vcs/unstage",
+  vcsRevert: "/vcs/revert",
+  vcsCommit: "/vcs/commit",
+  vcsPush: "/vcs/push",
+  vcsPull: "/vcs/pull",
   command: "/command",
   agent: "/agent",
   skill: "/skill",
@@ -78,6 +86,43 @@ export const InstanceApi = HttpApi.make("instance")
             description: "Retrieve the current git diff for the working tree or against the default branch.",
           }),
         ),
+        HttpApiEndpoint.get("vcsChanges", InstancePaths.vcsChanges, {
+          success: Vcs.ChangeSet,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "vcs.changes",
+            summary: "Get VCS changes",
+            description: "Retrieve staged and unstaged git changes for the working tree.",
+          }),
+        ),
+        HttpApiEndpoint.post("vcsCommitMessage", InstancePaths.vcsCommitMessage, {
+          success: Vcs.CommitMessageResponse,
+          error: Vcs.NoStagedChangesError,
+        }).annotateMerge(
+          OpenApi.annotations({ identifier: "vcs.commitMessage", summary: "Generate VCS commit message" }),
+        ),
+        HttpApiEndpoint.post("vcsStage", InstancePaths.vcsStage, {
+          payload: Vcs.PathsRequest,
+          success: Vcs.ChangeSet,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.stage", summary: "Stage VCS paths" })),
+        HttpApiEndpoint.post("vcsUnstage", InstancePaths.vcsUnstage, {
+          payload: Vcs.PathsRequest,
+          success: Vcs.ChangeSet,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.unstage", summary: "Unstage VCS paths" })),
+        HttpApiEndpoint.post("vcsRevert", InstancePaths.vcsRevert, {
+          payload: Vcs.PathsRequest,
+          success: Vcs.ChangeSet,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.revert", summary: "Revert unstaged VCS paths" })),
+        HttpApiEndpoint.post("vcsCommit", InstancePaths.vcsCommit, {
+          payload: Vcs.CommitRequest,
+          success: Vcs.ChangeSet,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.commit", summary: "Commit staged VCS changes" })),
+        HttpApiEndpoint.post("vcsPush", InstancePaths.vcsPush, {
+          success: Vcs.ChangeSet,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.push", summary: "Push VCS branch" })),
+        HttpApiEndpoint.post("vcsPull", InstancePaths.vcsPull, {
+          success: Vcs.ChangeSet,
+        }).annotateMerge(OpenApi.annotations({ identifier: "vcs.pull", summary: "Pull VCS branch" })),
         HttpApiEndpoint.get("command", InstancePaths.command, {
           success: Schema.Array(Command.Info),
         }).annotateMerge(
@@ -174,6 +219,46 @@ export const instanceHandlers = Layer.unwrap(
       return yield* vcs.diff(ctx.query.mode)
     })
 
+    const getVcsChanges = Effect.fn("InstanceHttpApi.vcsChanges")(function* () {
+      return yield* vcs.changes()
+    })
+
+    const badRequest = (error: unknown) => {
+      const result = new HttpApiError.BadRequest({})
+      if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
+        Object.defineProperty(result, "message", { value: error.message })
+      }
+      return result
+    }
+
+    const stageVcs = Effect.fn("InstanceHttpApi.vcsStage")(function* (ctx: { payload: Vcs.PathsRequest }) {
+      return yield* vcs.stage(ctx.payload.paths ?? []).pipe(Effect.mapError(badRequest))
+    })
+
+    const commitMessageVcs = Effect.fn("InstanceHttpApi.vcsCommitMessage")(function* () {
+      return yield* vcs.commitMessage()
+    })
+
+    const unstageVcs = Effect.fn("InstanceHttpApi.vcsUnstage")(function* (ctx: { payload: Vcs.PathsRequest }) {
+      return yield* vcs.unstage(ctx.payload.paths ?? []).pipe(Effect.mapError(badRequest))
+    })
+
+    const revertVcs = Effect.fn("InstanceHttpApi.vcsRevert")(function* (ctx: { payload: Vcs.PathsRequest }) {
+      return yield* vcs.revertUnstaged(ctx.payload.paths ?? []).pipe(Effect.mapError(badRequest))
+    })
+
+    const commitVcs = Effect.fn("InstanceHttpApi.vcsCommit")(function* (ctx: { payload: Vcs.CommitRequest }) {
+      return yield* vcs.commit(ctx.payload.message).pipe(Effect.mapError(badRequest))
+    })
+
+    const pushVcs = Effect.fn("InstanceHttpApi.vcsPush")(function* () {
+      return yield* vcs.push().pipe(Effect.mapError(badRequest))
+    })
+
+    const pullVcs = Effect.fn("InstanceHttpApi.vcsPull")(function* () {
+      return yield* vcs.pull().pipe(Effect.mapError(badRequest))
+    })
+
     const getCommand = Effect.fn("InstanceHttpApi.command")(function* () {
       return yield* command.list()
     })
@@ -200,6 +285,14 @@ export const instanceHandlers = Layer.unwrap(
         .handle("path", getPath)
         .handle("vcs", getVcs)
         .handle("vcsDiff", getVcsDiff)
+        .handle("vcsChanges", getVcsChanges)
+        .handle("vcsCommitMessage", commitMessageVcs)
+        .handle("vcsStage", stageVcs)
+        .handle("vcsUnstage", unstageVcs)
+        .handle("vcsRevert", revertVcs)
+        .handle("vcsCommit", commitVcs)
+        .handle("vcsPush", pushVcs)
+        .handle("vcsPull", pullVcs)
         .handle("command", getCommand)
         .handle("agent", getAgent)
         .handle("skill", getSkill)

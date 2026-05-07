@@ -1,4 +1,5 @@
 import type { Project, UserMessage } from "@opencode-ai/sdk/v2"
+import { Dialog } from "@opencode-ai/ui/dialog"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { createQuery, skipToken, useMutation, useQueryClient } from "@tanstack/solid-query"
 import {
@@ -14,6 +15,7 @@ import {
   onMount,
   untrack,
   createResource,
+  type JSX,
 } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createMediaQuery } from "@solid-primitives/media"
@@ -53,6 +55,7 @@ import {
 } from "@/pages/session/helpers"
 import { FileTabContent } from "@/pages/session/file-tabs"
 import { MessageTimeline } from "@/pages/session/message-timeline"
+import { MobileChangesPanel, MobileVcsModeToggle } from "@/pages/session/mobile-changes-panel"
 import { type DiffStyle, SessionReviewTab, type SessionReviewTabProps } from "@/pages/session/review-tab"
 import { useSessionLayout } from "@/pages/session/session-layout"
 import { syncSessionModel } from "@/pages/session/session-model-helpers"
@@ -75,6 +78,7 @@ const emptyFollowups: FollowupItem[] = []
 
 type ChangeMode = "git" | "branch" | "turn"
 type VcsMode = "git" | "branch"
+type MobileVcsChangeMode = "unstaged" | "staged"
 
 type SessionHistoryWindowInput = {
   sessionID: () => string | undefined
@@ -539,9 +543,12 @@ export default function Page() {
     messageId: undefined as string | undefined,
     mobileTab: "session" as "session" | "changes" | "files",
     mobileFilePreviewOpen: true,
+    mobileChangesMode: "unstaged" as MobileVcsChangeMode,
+    mobileChangesModeTouched: false,
     changes: "git" as ChangeMode,
     newSessionWorktree: "main",
     deferRender: false,
+    commitMessage: "",
   })
 
   const [followup, setFollowup] = persisted(
@@ -642,6 +649,171 @@ export default function Page() {
     }
   })
   const refreshVcs = () => void queryClient.invalidateQueries({ queryKey: vcsKey() })
+  const vcsChangesKey = createMemo(
+    () =>
+      ["session-vcs-changes", sdk.directory, sync.data.vcs?.branch ?? "", sync.data.vcs?.default_branch ?? ""] as const,
+  )
+  const emptyVcsChanges = () => ({ ahead: 0, behind: 0, staged: [], unstaged: [] })
+  const vcsChangesQuery = createQuery(() => ({
+    queryKey: vcsChangesKey(),
+    enabled: !isDesktop() && store.mobileTab === "changes" && sync.project?.vcs === "git",
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: 60 * 1000,
+    queryFn: () =>
+      sdk.client.vcs
+        .changes()
+        .then((result) => result.data)
+        .catch((error) => {
+          console.debug("[session-review] failed to load vcs changes", { error })
+          return emptyVcsChanges()
+        }),
+  }))
+  const refreshVcsChanges = () => void queryClient.invalidateQueries({ queryKey: vcsChangesKey() })
+  const refreshAllVcs = () => {
+    refreshVcs()
+    refreshVcsChanges()
+  }
+  const unstagedCount = () => vcsChangesQuery.data?.unstaged.length ?? 0
+  const stagedCount = () => vcsChangesQuery.data?.staged.length ?? 0
+  const mobileChangesMode = () => store.mobileChangesMode
+  const selectedMobileChanges = () => vcsChangesQuery.data?.[mobileChangesMode()] ?? []
+  const mobileChangesPanelMode = () =>
+    unstagedCount() === 0 && stagedCount() === 0 ? ("empty" as const) : mobileChangesMode()
+  const mobileChangesActionsDisabled = () => selectedMobileChanges().length === 0
+  const stageAllMutation = useMutation(() => ({
+    mutationFn: () => sdk.client.vcs.stage({ vcsPathsRequest: { paths: [] } }),
+    onSuccess: refreshAllVcs,
+    onError: (err) => {
+      showToast({
+        variant: "error",
+        title: language.t("common.requestFailed"),
+        description: formatServerError(err, language.t),
+      })
+    },
+  }))
+  const unstageAllMutation = useMutation(() => ({
+    mutationFn: () => sdk.client.vcs.unstage({ vcsPathsRequest: { paths: [] } }),
+    onSuccess: refreshAllVcs,
+    onError: (err) => {
+      showToast({
+        variant: "error",
+        title: language.t("common.requestFailed"),
+        description: formatServerError(err, language.t),
+      })
+    },
+  }))
+  const revertAllMutation = useMutation(() => ({
+    mutationFn: () => sdk.client.vcs.revert({ vcsPathsRequest: { paths: [] } }),
+    onSuccess: refreshAllVcs,
+    onError: (err) => {
+      showToast({
+        variant: "error",
+        title: language.t("common.requestFailed"),
+        description: formatServerError(err, language.t),
+      })
+    },
+  }))
+  const generateCommitMessageMutation = useMutation(() => ({
+    mutationFn: async () => {
+      const result = await sdk.client.vcs.commitMessage()
+      if (!result.data) throw new Error("Commit message generation failed")
+      return result.data.message
+    },
+    onSuccess: (message) => setStore("commitMessage", message),
+    onError: (err) => {
+      showToast({
+        variant: "error",
+        title: language.t("common.requestFailed"),
+        description: formatServerError(err, language.t),
+      })
+    },
+  }))
+  const commitAndPushMutation = useMutation(() => ({
+    mutationFn: async (message: string) => {
+      await sdk.client.vcs.commit({ vcsCommitRequest: { message } })
+      await sdk.client.vcs.push()
+    },
+    onSuccess: () => {
+      dialog.close()
+      refreshAllVcs()
+    },
+    onError: (err) => {
+      showToast({
+        variant: "error",
+        title: language.t("common.requestFailed"),
+        description: formatServerError(err, language.t),
+      })
+    },
+  }))
+  const mobileChangesPending = () =>
+    stageAllMutation.isPending ||
+    unstageAllMutation.isPending ||
+    revertAllMutation.isPending ||
+    generateCommitMessageMutation.isPending ||
+    commitAndPushMutation.isPending
+  const stageAll = () => {
+    if (mobileChangesPending() || sync.project?.vcs !== "git" || unstagedCount() === 0) return
+    stageAllMutation.mutate()
+  }
+  const unstageAll = () => {
+    if (mobileChangesPending() || sync.project?.vcs !== "git" || mobileChangesMode() !== "staged" || stagedCount() === 0) return
+    unstageAllMutation.mutate()
+  }
+  const revertAll = () => {
+    if (mobileChangesPending() || sync.project?.vcs !== "git" || unstagedCount() === 0) return
+    if (!window.confirm("Revert all unstaged changes? This discards unstaged edits and untracked files, but keeps staged changes.")) return
+    revertAllMutation.mutate()
+  }
+  const openCommit = () => {
+    if (mobileChangesPending() || sync.project?.vcs !== "git" || mobileChangesMode() !== "staged" || stagedCount() === 0) return
+    setStore("commitMessage", "")
+    dialog.show(() => <DialogCommitSheet />)
+    generateCommitMessageMutation.mutate()
+  }
+  const submitCommit = () => {
+    const message = store.commitMessage.trim()
+    if (!message || mobileChangesPending() || mobileChangesMode() !== "staged") return
+    commitAndPushMutation.mutate(message)
+  }
+  function DialogCommitSheet() {
+    return (
+      <Dialog
+        title="Commit changes"
+        size="large"
+        transition
+        class="!fixed !inset-x-2 !bottom-2 !top-auto !w-auto !max-w-none !min-h-0 !rounded-t-xl"
+      >
+        <div class="flex flex-col gap-4 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-2">
+          <textarea
+            class="min-h-40 w-full resize-none rounded-lg border border-border-base bg-background-base px-3 py-2 text-14-regular text-text-strong outline-none focus:border-border-strong"
+            value={store.commitMessage}
+            disabled={generateCommitMessageMutation.isPending || commitAndPushMutation.isPending}
+            placeholder={generateCommitMessageMutation.isPending ? "Generating commit message…" : "Commit message"}
+            onInput={(event) => setStore("commitMessage", event.currentTarget.value)}
+          />
+          <div class="flex justify-end gap-2">
+            <Button variant="ghost" size="large" disabled={commitAndPushMutation.isPending} onClick={() => dialog.close()}>
+              {language.t("common.cancel")}
+            </Button>
+            <Button
+              variant="primary"
+              size="large"
+              disabled={
+                !store.commitMessage.trim() ||
+                generateCommitMessageMutation.isPending ||
+                commitAndPushMutation.isPending ||
+                stagedCount() === 0 ||
+                unstagedCount() > 0
+              }
+              onClick={submitCommit}
+            >
+              Commit & Push
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    )
+  }
   const reviewDiffs = () => {
     if (store.changes === "git" || store.changes === "branch")
       // avoids suspense
@@ -896,6 +1068,8 @@ export default function Page() {
       () => {
         setStore("messageId", undefined)
         setStore("changes", "git")
+        setStore("mobileChangesMode", "unstaged")
+        setStore("mobileChangesModeTouched", false)
         setUi("pendingMessage", undefined)
       },
       { defer: true },
@@ -910,7 +1084,7 @@ export default function Page() {
         : undefined
     const file = typeof props?.file === "string" ? props.file : undefined
     if (!file || file.startsWith(".git/")) return
-    refreshVcs()
+    refreshAllVcs()
   })
   onCleanup(stopVcs)
 
@@ -1045,10 +1219,29 @@ export default function Page() {
 
   createEffect(
     on(
+      () => store.mobileTab,
+      (tab, prev) => {
+        if (tab !== "changes" || prev === "changes") return
+        refreshVcsChanges()
+      },
+      { defer: true },
+    ),
+  )
+
+  createEffect(() => {
+    if (store.mobileTab !== "changes") return
+    if (store.mobileChangesModeTouched) return
+    if (store.mobileChangesMode === "unstaged" && unstagedCount() === 0 && stagedCount() > 0) {
+      setStore("mobileChangesMode", "staged")
+    }
+  })
+
+  createEffect(
+    on(
       () => sync.data.session_status[params.id ?? ""]?.type,
       (next, prev) => {
         if (next !== "idle" || prev === undefined || prev === "idle") return
-        refreshVcs()
+        refreshAllVcs()
       },
       { defer: true },
     ),
@@ -1154,9 +1347,10 @@ export default function Page() {
     return language.t("session.review.noChanges")
   })
 
-  const reviewEmpty = (input: { loadingClass: string; emptyClass: string }) => {
+  const reviewEmpty = (input: { loadingClass: string; emptyClass: string; ready?: () => boolean }) => {
     if (store.changes === "git" || store.changes === "branch") {
-      if (!reviewReady()) return <div class={input.loadingClass}>{language.t("session.review.loadingChanges")}</div>
+      if (!(input.ready ?? reviewReady)())
+        return <div class={input.loadingClass}>{language.t("session.review.loadingChanges")}</div>
       return empty(reviewEmptyText())
     }
 
@@ -1174,16 +1368,21 @@ export default function Page() {
 
   const reviewContent = (input: {
     diffStyle: DiffStyle
+    diffs?: SessionReviewTabProps["diffs"]
+    ready?: () => boolean
     onDiffStyleChange?: (style: DiffStyle) => void
     classes?: SessionReviewTabProps["classes"]
     loadingClass: string
     emptyClass: string
+    title?: JSX.Element
+    subheader?: JSX.Element
   }) => (
     <Show when={!store.deferRender}>
       <SessionReviewTab
-        title={changesTitle()}
+        title={input.title ?? changesTitle()}
+        subheader={input.subheader}
         empty={reviewEmpty(input)}
-        diffs={reviewDiffs}
+        diffs={input.diffs ?? reviewDiffs}
         view={view}
         diffStyle={input.diffStyle}
         onDiffStyleChange={input.onDiffStyleChange}
@@ -1418,6 +1617,43 @@ export default function Page() {
   const mobileFallback = () => (
     <Switch>
       <Match when={store.mobileTab === "files"}>{mobileFilesPanel()}</Match>
+      <Match when={store.mobileTab === "changes"}>
+        <MobileChangesPanel
+          mode={mobileChangesPanelMode()}
+          git={sync.project?.vcs === "git"}
+          pending={mobileChangesPending()}
+          actionsDisabled={mobileChangesActionsDisabled()}
+          onStageAll={stageAll}
+          onUnstageAll={unstageAll}
+          onRevertAll={revertAll}
+          onCommit={openCommit}
+        >
+          {reviewContent({
+            diffStyle: "unified",
+            diffs: selectedMobileChanges,
+            ready: () => !vcsChangesQuery.isPending,
+            title: language.t("ui.sessionReview.title.git"),
+            subheader: (
+              <MobileVcsModeToggle
+                mode={mobileChangesPanelMode()}
+                disabled={mobileChangesPending() || !sync.project?.vcs || mobileChangesPanelMode() === "empty"}
+                onModeChange={(mode) => {
+                  setStore("mobileChangesMode", mode)
+                  setStore("mobileChangesModeTouched", true)
+                }}
+              />
+            ),
+            classes: {
+              root: "pb-[calc(1rem+env(safe-area-inset-bottom))]",
+              header: "px-4 pt-3",
+              subheader: "px-4 pt-2 pb-3",
+              container: "px-4",
+            },
+            loadingClass: "px-4 py-4 text-text-weak",
+            emptyClass: "h-full pb-64 -mt-4 flex flex-col items-center justify-center text-center gap-6",
+          })}
+        </MobileChangesPanel>
+      </Match>
       <Match when={true}>
         {reviewContent({
           diffStyle: "unified",
@@ -2025,55 +2261,57 @@ export default function Page() {
             </Switch>
           </div>
 
-          <SessionComposerRegion
-            state={composer}
-            ready={!store.deferRender && messagesReady()}
-            centered={centered()}
-            inputRef={(el) => {
-              inputRef = el
-            }}
-            newSessionWorktree={newSessionWorktree()}
-            onNewSessionWorktreeReset={() => setStore("newSessionWorktree", "main")}
-            onSubmit={() => {
-              comments.clear()
-              resumeScroll()
-            }}
-            onResponseSubmit={resumeScroll}
-            followup={
-              params.id && !isChildSession()
-                ? {
-                    queue: queueEnabled,
-                    items: followupDock(),
-                    sending: sendingFollowup(),
-                    edit: editingFollowup(),
-                    onQueue: queueFollowup,
-                    onAbort: () => {
-                      const id = params.id
-                      if (!id) return
-                      setFollowup("paused", id, true)
-                    },
-                    onSend: (id) => {
-                      void sendFollowup(params.id!, id, { manual: true })
-                    },
-                    onEdit: editFollowup,
-                    onEditLoaded: clearFollowupEdit,
-                  }
-                : undefined
-            }
-            revert={
-              rolled().length > 0
-                ? {
-                    items: rolled(),
-                    restoring: restoring(),
-                    disabled: reverting(),
-                    onRestore: restore,
-                  }
-                : undefined
-            }
-            setPromptDockRef={(el) => {
-              promptDock = el
-            }}
-          />
+          <Show when={isDesktop() || store.mobileTab !== "changes"}>
+            <SessionComposerRegion
+              state={composer}
+              ready={!store.deferRender && messagesReady()}
+              centered={centered()}
+              inputRef={(el) => {
+                inputRef = el
+              }}
+              newSessionWorktree={newSessionWorktree()}
+              onNewSessionWorktreeReset={() => setStore("newSessionWorktree", "main")}
+              onSubmit={() => {
+                comments.clear()
+                resumeScroll()
+              }}
+              onResponseSubmit={resumeScroll}
+              followup={
+                params.id && !isChildSession()
+                  ? {
+                      queue: queueEnabled,
+                      items: followupDock(),
+                      sending: sendingFollowup(),
+                      edit: editingFollowup(),
+                      onQueue: queueFollowup,
+                      onAbort: () => {
+                        const id = params.id
+                        if (!id) return
+                        setFollowup("paused", id, true)
+                      },
+                      onSend: (id) => {
+                        void sendFollowup(params.id!, id, { manual: true })
+                      },
+                      onEdit: editFollowup,
+                      onEditLoaded: clearFollowupEdit,
+                    }
+                  : undefined
+              }
+              revert={
+                rolled().length > 0
+                  ? {
+                      items: rolled(),
+                      restoring: restoring(),
+                      disabled: reverting(),
+                      onRestore: restore,
+                    }
+                  : undefined
+              }
+              setPromptDockRef={(el) => {
+                promptDock = el
+              }}
+            />
+          </Show>
 
           <Show when={desktopReviewOpen()}>
             <div onPointerDown={() => size.start()}>
